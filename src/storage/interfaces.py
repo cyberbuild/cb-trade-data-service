@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List
+from typing import Any, List, Optional
 
 class IRawDataStorage(ABC):
     @abstractmethod
@@ -35,4 +35,25 @@ class IRawDataStorage(ABC):
         """
         Check if a folder for a coin exists for a given exchange.
         """
+        pass
+
+class IStorageManager(ABC):
+    @abstractmethod
+    def save_entry(self, exchange_name: str, coin_symbol: str, timestamp: Any, data: dict):
+        pass
+
+    @abstractmethod
+    def get_range(self, exchange_name: str, coin_symbol: str, start_time: Any, end_time: Any, limit: int = 100, offset: int = 0) -> List[dict]:
+        pass
+
+    @abstractmethod
+    def get_latest_entry(self, exchange_name: str, coin_symbol: str) -> Optional[dict]:
+        pass
+
+    @abstractmethod
+    def list_coins(self, exchange_name: str) -> List[str]:
+        pass
+
+    @abstractmethod
+    def check_coin_exists(self, exchange_name: str, coin_symbol: str) -> bool:
         pass

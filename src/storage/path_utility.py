@@ -1,52 +1,50 @@
 # Storage Path Utility for cb-trade-data-service
 # Implements standardized path construction for raw order book data files.
 
+import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Union, Optional
 
 def _parse_timestamp(timestamp: Union[str, int, float, datetime]) -> Optional[datetime]:
-    """
-    Parses various timestamp formats into a timezone-aware UTC datetime object.
-
-    Args:
-        timestamp: The timestamp to parse (datetime, int/float Unix timestamp, or ISO string).
-
-    Returns:
-        A timezone-aware datetime object in UTC, or None if parsing fails.
-    """
-    dt = None
+    """Parse various timestamp formats into a timezone-aware UTC datetime object."""
     if isinstance(timestamp, datetime):
-        dt = timestamp
-    elif isinstance(timestamp, (int, float)):
-        try:
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        except (OSError, ValueError): # Handle potential errors like out-of-range timestamps
-            return None
-    elif isinstance(timestamp, str):
-        try:
-            # Try ISO format first (ensure it handles timezone info correctly or assumes UTC)
-            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00')) # Handle 'Z' for UTC
-        except ValueError:
-            # Try parsing as integer/float string (Unix timestamp)
-            try:
-                dt = datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
-            except ValueError:
-                return None # Invalid string format
-    else:
-        # Or raise TypeError("Unsupported timestamp type")
-        return None
+        if timestamp.tzinfo is None:
+            return timestamp.replace(tzinfo=timezone.utc)
+        return timestamp.astimezone(timezone.utc)
 
-    # Ensure the datetime object is timezone-aware and in UTC
-    if dt:
-        if dt.tzinfo is None:
-            # If parsed from a naive format, assume UTC (or raise error if ambiguity is critical)
-            # This assumption might need review based on expected inputs
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            # Convert to UTC if it's not already
-            dt = dt.astimezone(timezone.utc)
-    return dt
+    if isinstance(timestamp, (int, float)):
+        try:
+            return datetime.fromtimestamp(timestamp, timezone.utc)
+        except (ValueError, TypeError):
+            logging.warning(f"Could not parse numeric timestamp: {timestamp}")
+            return None
+
+    if isinstance(timestamp, str):
+        try:
+            # Try standard ISO format (handles Z and offsets)
+            return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        except ValueError:
+            try:
+                # Try custom format YYYYMMDDTHHMMSSZ
+                return datetime.strptime(timestamp, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+            except ValueError:
+                try:
+                    # Try custom format YYYYMMDDTHHMMSS (assume UTC)
+                    return datetime.strptime(timestamp, '%Y%m%dT%H%M%S').replace(tzinfo=timezone.utc)
+                except ValueError:
+                    try:
+                        # Try parsing as numeric string (Unix timestamp)
+                        return datetime.fromtimestamp(float(timestamp), timezone.utc)
+                    except (ValueError, TypeError):
+                        logging.warning(f"Could not parse string timestamp: {timestamp}")
+                        return None
+        except Exception as e:
+            logging.error(f"Unexpected error parsing string timestamp {timestamp}: {e}")
+            return None
+
+    logging.warning(f"Unsupported timestamp type: {type(timestamp)}")
+    return None
 
 
 class StoragePathUtility:

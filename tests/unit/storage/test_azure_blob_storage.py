@@ -7,7 +7,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 # Import relative to the 'data-service' directory
 from src.storage.implementations.azure_blob_storage import AzureBlobStorage
-from datetime import datetime
+from datetime import datetime, timezone
 
 @pytest.fixture
 def azure_storage():
@@ -41,11 +41,11 @@ def test_get_range(azure_storage):
     mock_container.list_blobs.return_value = [mock_blob]
     mock_container.get_blob_client.return_value = mock_blob_client
 
-    # Patch _parse_timestamp to always return a valid datetime
-    with patch('src.storage.implementations.azure_blob_storage._parse_timestamp', return_value=datetime(2024, 1, 1)):
+    # Patch _parse_timestamp to always return a timezone-aware datetime
+    with patch('src.storage.implementations.azure_blob_storage._parse_timestamp', return_value=datetime(2024, 1, 1, tzinfo=timezone.utc)):
         result = storage.get_range('binance', 'BTC', 0, 2)
         assert isinstance(result, list)
-        assert result[0]['foo'] == 'bar'
+        assert result[0]['data']['foo'] == 'bar'
 
 def test_get_latest_entry(azure_storage):
     storage, mock_container = azure_storage
@@ -56,16 +56,19 @@ def test_get_latest_entry(azure_storage):
     mock_container.list_blobs.return_value = [mock_blob]
     mock_container.get_blob_client.return_value = mock_blob_client
     result = storage.get_latest_entry('binance', 'BTC')
-    assert result['foo'] == 'bar'
+    assert result['data']['foo'] == 'bar'
 
 def test_list_coins(azure_storage):
-    storage, mock_container = azure_storage
-    # Simulate a 'directory' blob for coin detection
-    mock_blob = MagicMock()
-    mock_blob.name = 'raw_data/binance/BTC/'
-    mock_container.list_blobs.return_value = [mock_blob]
-    coins = storage.list_coins('binance')
-    assert 'BTC' in coins
+        storage, mock_container = azure_storage
+        # Simulate a 'directory' blob for coin detection using walk_blobs
+        mock_blob_prefix = MagicMock()
+        mock_blob_prefix.name = 'raw_data/binance/BTC/'
+        # walk_blobs yields prefixes when delimiter is used
+        mock_container.walk_blobs.return_value = [mock_blob_prefix]
+        coins = storage.list_coins('binance')
+        assert 'BTC' in coins
+        # Verify walk_blobs was called correctly
+        mock_container.walk_blobs.assert_called_once_with(name_starts_with='raw_data/binance/', delimiter='/')
 
 def test_check_coin_exists(azure_storage):
     storage, mock_container = azure_storage

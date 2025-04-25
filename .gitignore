@@ -1,0 +1,16 @@
+# Environment variables
+.env
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# IDE / Editor specific
+.vscode/
+.idea/
+
+# Test specific
+temp_test_storage/
