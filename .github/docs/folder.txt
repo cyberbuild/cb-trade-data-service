@@ -1,0 +1,54 @@
+├── .gitattributes
+├── .gitignore
+├── README.md
+├── environment.yml          # Single Conda environment file for the entire system (Dev)
+├── docker-compose.yml       # Optional: for local development orchestration
+├── data-service/            # Dedicated Data Service repository
+│   ├── src/                 # Source code for the Data Service
+│   ├── tests/               # Unit and integration tests for the Data Service
+│   ├── config/              # Configuration files for the Data Service
+│   ├── docs/                # Documentation for the Data Service
+│   ├── deploy/              # Deployment files for the Data Service
+│   ├── scripts/             # Utility scripts for the Data Service
+│   └── README.md            # Service-specific README
+├── feature-service/         # Dedicated Feature Engineering Service repository
+│   ├── src/                 # Source code for the Feature Engineering Service
+│   ├── tests/               # Unit and integration tests for the Feature Engineering Service
+│   ├── config/              # Configuration files for the Feature Engineering Service
+│   ├── docs/                # Documentation for the Feature Engineering Service
+│   ├── deploy/              # Deployment files for the Feature Engineering Service
+│   ├── scripts/             # Utility scripts for the Feature Engineering Service
+│   └── README.md            # Service-specific README
+├── model-service/           # Dedicated Model Service repository
+│   ├── src/                 # Source code for the Model Service
+│   ├── tests/               # Unit and integration tests for the Model Service
+│   ├── config/              # Configuration files for the Model Service
+│   ├── docs/                # Documentation for the Model Service
+│   ├── deploy/              # Deployment files for the Model Service
+│   ├── scripts/             # Utility scripts for the Model Service
+│   └── README.md            # Service-specific README
+├── build-service/           # Dedicated Build Service repository
+│   ├── src/                 # Source code for the Build Service
+│   ├── tests/               # Unit and integration tests for the Build Service
+│   ├── config/              # Configuration files for the Build Service
+│   ├── docs/                # Documentation for the Build Service
+│   ├── deploy/              # Deployment files for the Build Service
+│   ├── scripts/             # Utility scripts for the Build Service
+│   └── README.md            # Service-specific README
+├── trading-engine/          # Core logic for Stage and Live environments repository
+│   ├── src/                 # Source code for the Trading Engine
+│   ├── tests/               # Unit and integration tests for the Trading Engine
+│   ├── config/              # Configuration files for the Trading Engine
+│   ├── docs/                # Documentation for the Trading Engine
+│   ├── deploy/              # Deployment files for the Trading Engine
+│   ├── scripts/             # Utility scripts for the Trading Engine
+│   └── README.md            # Repository README
+├── shared-libs/             # Repository for shared libraries
+│   ├── mcp-messages/        # Shared MCP message definitions library
+│   │   ├── src/             # Source code for the MCP messages library
+│   │   └── README.md        # Library README
+│   ├── peft-lora-lib/       # Shared PEFT/LoRA helper library
+│   │   ├── src/             # Source code for the PEFT/LoRA library
+│   │   └── README.md        # Library README
+│   └── README.md            # Shared libraries README
+└── README.md                # Top-level project README
