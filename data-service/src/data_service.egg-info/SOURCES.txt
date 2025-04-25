@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/data_service.egg-info/PKG-INFO
+src/data_service.egg-info/SOURCES.txt
+src/data_service.egg-info/dependency_links.txt
+src/data_service.egg-info/top_level.txt
+src/storage/interfaces.py
+src/storage/path_utility.py
+src/storage/implementations/azure_blob_storage.py
+src/storage/implementations/local_file_storage.py

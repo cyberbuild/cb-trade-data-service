@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: data-service
+Version: 0.1.0
+Summary: Cyberbuild Trade Data Service
+Requires-Python: >=3.9

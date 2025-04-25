@@ -1,9 +1,11 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+# Add the 'data-service' directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
 from datetime import datetime
 import pytest
-from storage.path_utility import StoragePathUtility
+# Import relative to the 'data-service' directory
+from src.storage.path_utility import StoragePathUtility
 
 # Valid inputs (exchange, coin, timestamp)
 def test_valid_inputs_datetime():
@@ -41,7 +43,7 @@ def test_edge_case_end_of_month():
 
 # Invalid input types
 def test_invalid_timestamp_type():
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         StoragePathUtility.get_raw_data_path('binance', 'BTC', [2024, 4, 24])
 
 def test_invalid_timestamp_string():
