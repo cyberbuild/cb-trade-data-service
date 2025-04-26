@@ -4,6 +4,10 @@ if you have a terminal already open, make sure the right conda environemnt is se
 ##testing
 when running all tests, start with unit tests before integration tests. All unit tests should pass before running integration tests.
 testing should display the pass/fail status of each test.
+Using PEP 420. New tests require  pip install -e .
 
 ##python
 PEP 420 is being used.
+
+##test imports
+When writing or generating tests, do not use the 'src.' prefix in imports. Use imports relative to the package root (e.g., 'from collection.manager import ...'), as required by src-layout and PEP 420. This avoids ModuleNotFoundError issues.
