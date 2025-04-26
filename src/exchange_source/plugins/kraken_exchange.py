@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Callable, Union
 import threading
 
 import ccxt
-from src.data_source.interfaces import IExchangeAPIClient
+from src.exchange_source.interfaces import IExchangeAPIClient
 from .ccxt_exchange import CCXTExchangeClient
 
 # Configure logging

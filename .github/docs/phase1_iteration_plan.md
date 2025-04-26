@@ -116,16 +116,16 @@ Testing Framework: All tests will be implemented using pytest.
 
 ### 2.1 Design and Implement IExchangeAPIClient:
 - Define the core IExchangeAPIClient interface with methods like get_exchange_name, fetch_historical_data, start_realtime_stream, check_coin_availability.
-- Step 1: Create a Python file for the interface at the following path: data-service/src/data_source/interfaces.py.
+- Step 1: Create a Python file for the interface at the following path: data-service/src/exchange_source/interfaces.py.
 - Step 2: Define the IExchangeAPIClient interface (using abc module) within this file.
 
 ### 2.2 Design and Implement PluginRegistry:
 - Implement a PluginRegistry class to store IExchangeAPIClient instances, mapping exchange names to clients.
-- Step 1: Create a Python file for the registry at the following path: data-service/src/data_source/microkernel.py.
+- Step 1: Create a Python file for the registry at the following path: data-service/src/exchange_source/microkernel.py.
 - Step 2: Define the PluginRegistry class within this file.
 
 **Test Cases**
-- Test File Path: data-service/tests/unit/data_source/test_microkernel.py (Tests for PluginRegistry and DataSourceConnectorImpl)
+- Test File Path: data-service/tests/unit/exchange_source/test_microkernel.py (Tests for PluginRegistry and DataSourceConnectorImpl)
 - Test adding a plugin to the registry.
 - Test retrieving a plugin by name.
 - Test attempting to retrieve a non-existent plugin.
@@ -134,16 +134,16 @@ Testing Framework: All tests will be implemented using pytest.
 
 ### 2.3 Design and Implement IDataSourceConnector and DataSourceConnectorImpl (Microkernel):
 - Define the IDataSourceConnector interface.
-- Step 1: Add the IDataSourceConnector interface definition to the file created in 2.1: data-service/src/data_source/interfaces.py.
+- Step 1: Add the IDataSourceConnector interface definition to the file created in 2.1: data-service/src/exchange_source/interfaces.py.
 - Implement DataSourceConnectorImpl. This class will:
   - Discover and register IExchangeAPIClient plugins (initially, manually register a mock or basic implementation).
   - Provide a method get_client(exchange_name) to retrieve the correct plugin from the PluginRegistry.
   - Delegate calls like check_coin_availability and fetch_historical_data to the retrieved plugin.
-- Step 2: Add the DataSourceConnectorImpl class to the file created in 2.2: data-service/src/data_source/microkernel.py.
+- Step 2: Add the DataSourceConnectorImpl class to the file created in 2.2: data-service/src/exchange_source/microkernel.py.
 - Write unit tests for DataSourceConnectorImpl, ensuring correct plugin retrieval and delegation.
 
 **Test Cases**
-- Test File Path: data-service/tests/unit/data_source/test_microkernel.py (Tests for PluginRegistry and DataSourceConnectorImpl)
+- Test File Path: data-service/tests/unit/exchange_source/test_microkernel.py (Tests for PluginRegistry and DataSourceConnectorImpl)
 - Test get_client with a registered exchange name: verify the correct plugin instance is returned.
 - Test get_client with a non-registered exchange name: verify appropriate error handling (e.g., raising an exception).
 - Test delegation of check_coin_availability to a mock plugin: verify the call is made with correct arguments and the result is returned.
@@ -154,7 +154,7 @@ Testing Framework: All tests will be implemented using pytest.
 ### 2.4 Implement a Concrete CCXT IExchangeAPIClient Plugin:
 
 Implement a concrete class `CCXTExchangeClient` that implements `IExchangeAPIClient` using the CCXT library to interact with various exchanges.
-- Step 1: Create a Python file for the CCXT plugin at the following path: `data-service/src/data_source/plugins/ccxt_exchange.py`.
+- Step 1: Create a Python file for the CCXT plugin at the following path: `data-service/src/exchange_source/plugins/ccxt_exchange.py`.
 - Step 2: Define the `CCXTExchangeClient` class within this file, inheriting from `IExchangeAPIClient`.
 - Implement the `get_exchange_name` method to return the name of the exchange instance (e.g., `"crypto.com"` for Crypto.com).
 - Note: Use the Crypto.com exchange via CCXT for fetching historical OHLC data, as it provides up to two weeks of historical data.
@@ -166,7 +166,7 @@ Implement a concrete class `CCXTExchangeClient` that implements `IExchangeAPICli
 - Implement a mechanism for this plugin to be discovered and registered with the `PluginRegistry` in the Data Service startup.
 
 **Test Cases**
-- Test File Path: `data-service/tests/unit/data_source/plugins/test_ccxt_exchange.py`
+- Test File Path: `data-service/tests/unit/exchange_source/plugins/test_ccxt_exchange.py`
 - Test that the plugin correctly implements all methods of `IExchangeAPIClient`.
 - Test `get_exchange_name` returns the correct exchange name.
 - Test `check_coin_availability` for a known available market.
@@ -185,19 +185,41 @@ Implement a concrete class `CCXTExchangeClient` that implements `IExchangeAPICli
 
 ## Iteration 3: Real-Time Data Collection & Storage Integration
 
-**Goal**: Implement the real-time data collection flow, integrating the Data Source Connector and Storage Manager.
+**Goal**: Implement the real-time data collection flow, integrating the Data Source Connector and Storage Manager, and establish the system for managing download targets.
 
-### 3.1 Design and Implement CoinCollectionList:
-- Implement CoinCollectionList to manage the list of coins being collected and their assigned exchange.
-- Step 1: Create a Python file for the list manager at the following path: data-service/src/collection/list.py.
-- Step 2: Define the CoinCollectionList class within this file.
+### 3.1 Design and Implement Target List Manager (using Delta Lake):
+- **Purpose**: Implement a system to manage the list of targets (coin, exchange, interval, enabled status, etc.) that the service should download data for. This list will be managed programmatically by the system.
+- **Technology**: Utilize a Delta Lake table managed via the `delta-rs` (`deltalake`) Python library. This provides ACID transactions, schema enforcement, and versioning for the target list.
+- **Storage Modularity**: Design the implementation to support storing the Delta table on either the local filesystem or Azure Blob Storage, configurable at runtime.
+- **Configuration**:
+    - Define configuration settings (e.g., in `config.py` or environment variables) to specify:
+        - `TARGET_STORAGE_TYPE`: `'local'` or `'azure'`.
+        - `TARGET_TABLE_PATH`: Local path or Azure Blob URI (e.g., `az://<container>/targets_delta`).
+        - `AZURE_STORAGE_OPTIONS`: Dictionary with Azure credentials/options if using Azure backend.
+- **Implementation**:
+    - Step 1: Create a new directory for this functionality: `data-service/src/target_management/`.
+    - Step 2: Create a Python file for the manager implementation: `data-service/src/target_management/manager.py`.
+    - Step 3: Define a `TargetManager` class within this file.
+    - Step 4: Implement logic within `TargetManager` to:
+        - Read configuration to determine storage backend (local/Azure) and path/options.
+        - Initialize a `deltalake.DeltaTable` instance.
+        - Handle initial table creation if it doesn't exist, defining the schema (e.g., `target_id`, `coin`, `exchange`, `exchange_id`, `interval`, `enabled`, `last_updated`, etc.).
+        - Provide methods for CRUD operations: `add_target`, `update_target`, `delete_target`, `get_target`, `list_targets` (e.g., filtering by `enabled`).
+        - Use `deltalake` functions (`write_deltalake`, `DeltaTable.update`, `DeltaTable.delete`, `DeltaTable.to_pandas`) for table interactions.
+- **Dependencies**: Add `deltalake` to the project dependencies (`environment.yml`).
 
 **Test Cases**
-- Test File Path: data-service/tests/unit/collection/test_list.py
-- Test adding a coin and exchange to the list.
-- Test getting the exchange for a coin.
-- Test attempting to get the exchange for a coin not in the list.
-- Test listing all coins being collected.
+- Test File Path: `data-service/tests/unit/target_management/test_manager.py`
+- Test initializing `TargetManager` with local storage configuration.
+- Test initializing `TargetManager` with Azure storage configuration (mocking Azure connection).
+- Test initial table creation if it doesn't exist (local and mocked Azure).
+- Test `add_target`: verify data is written correctly (check resulting DataFrame/Parquet).
+- Test `update_target`: verify predicate and updates work.
+- Test `delete_target`: verify row is removed.
+- Test `get_target` retrieves the correct row.
+- Test `list_targets` returns correct rows, including filtering for enabled targets.
+- Test handling of configuration errors (e.g., missing Azure options when type is Azure).
+- Test handling of `deltalake` exceptions (e.g., schema mismatch, connection errors).
 
 ### 3.2 Design and Implement RealTimeProcessor:
 - Implement RealTimeProcessor. This class will receive raw data entries (via a callback from the IExchangeAPIClient plugin), store them using IStorageManager, and prepare them for distribution.
@@ -378,14 +400,14 @@ Implement a concrete class `CCXTExchangeClient` that implements `IExchangeAPICli
 ### 7.2 Implement Real IExchangeAPIClient Plugins:
 - Choose one or two real exchange APIs (e.g., Binance, Coinbase).
 - Implement concrete IExchangeAPIClient classes for these exchanges, handling their specific APIs, data formats, authentication, and rate limits.
-- Step 1: Create a new directory for plugins if it doesn't exist: data-service/src/data_source/plugins/.
-- Step 2: Create a Python file for each real exchange plugin (e.g., data-service/src/data_source/plugins/binance_exchange.py, data-service/src/data_source/plugins/coinbase_exchange.py).
+- Step 1: Create a new directory for plugins if it doesn't exist: data-service/src/exchange_source/plugins/.
+- Step 2: Create a Python file for each real exchange plugin (e.g., data-service/src/exchange_source/plugins/binance_exchange.py, data-service/src/exchange_source/plugins/coinbase_exchange.py).
 - Step 3: Define the concrete IExchangeAPIClient class for each exchange within its respective file, inheriting from IExchangeAPIClient.
 - Ensure they translate data to the standardized internal format.
 - Implement the plugin discovery mechanism to pick up these new plugins.
 
 **Test Cases**
-- Test File Path: data-service/tests/unit/data_source/plugins/test_[exchange_name]_exchange.py (e.g., test_binance_exchange.py)
+- Test File Path: data-service/tests/unit/exchange_source/plugins/test_[exchange_name]_exchange.py (e.g., test_binance_exchange.py)
 - Test that each real plugin correctly implements IExchangeAPIClient.
 - Test get_exchange_name for each plugin returns the correct exchange name.
 - Test check_coin_availability for a real coin on the exchange.

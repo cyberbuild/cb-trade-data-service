@@ -1,6 +1,6 @@
 import pytest
 import datetime
-from src.data_source.plugins.ccxt_exchange import CCXTExchangeClient
+from src.exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
 
 class TestCCXTExchangeClient:
     @pytest.fixture

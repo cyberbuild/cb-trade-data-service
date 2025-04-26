@@ -89,3 +89,7 @@ Pipfile.lock
 
 # Pyre type checker
 .pyre/
+
+# Ignore local environment files to prevent committing secrets
+.env
+.env.test

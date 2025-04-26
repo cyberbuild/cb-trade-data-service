@@ -1,7 +1,7 @@
-# tests/integration/data_source/plugins/test_kraken_exchange_integration.py
+# tests/integration/exchange_source/plugins/test_kraken_exchange_integration.py
 import pytest
 import datetime
-from src.data_source.plugins.ccxt_exchange import CCXTExchangeClient
+from src.exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
 import logging
 
 logging.basicConfig(level=logging.INFO)
