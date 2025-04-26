@@ -4,3 +4,6 @@ if you have a terminal already open, make sure the right conda environemnt is se
 ##testing
 when running all tests, start with unit tests before integration tests. All unit tests should pass before running integration tests.
 testing should display the pass/fail status of each test.
+
+##python
+PEP 420 is being used.

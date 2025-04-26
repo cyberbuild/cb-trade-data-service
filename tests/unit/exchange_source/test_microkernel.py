@@ -1,7 +1,7 @@
 import pytest
 import asyncio
-from src.exchange_source.interfaces import IExchangeAPIClient
-from src.exchange_source.microkernel import PluginRegistry, DataSourceConnectorImpl
+from exchange_source.interfaces import IExchangeAPIClient
+from exchange_source.microkernel import PluginRegistry, DataSourceConnectorImpl
 
 class DummyClient(IExchangeAPIClient):
     def __init__(self, name, available=True, data=None):

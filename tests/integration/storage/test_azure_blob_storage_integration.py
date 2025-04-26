@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from azure.storage.blob import BlobServiceClient, ContainerSasPermissions
 
-from src.storage.implementations.azure_blob_storage import AzureBlobStorage
+from storage.implementations.azure_blob_storage import AzureBlobStorage
 
 # --- Configuration ---
 # Attempt to get connection string from environment variable

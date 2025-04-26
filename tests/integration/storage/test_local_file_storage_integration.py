@@ -5,8 +5,8 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from src.storage.implementations.local_file_storage import LocalFileStorage
-from src.storage.path_utility import StoragePathUtility
+from storage.implementations.local_file_storage import LocalFileStorage
+from storage.path_utility import StoragePathUtility
 
 # Test constants
 TEST_EXCHANGE = "test_exchange"

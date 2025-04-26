@@ -6,7 +6,7 @@ import datetime
 
 # Add the 'data-service' directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
-from src.storage.storage_manager import StorageManagerImpl
+from storage.storage_manager import StorageManagerImpl
 
 class DummyRawDataStorage:
     def __init__(self):

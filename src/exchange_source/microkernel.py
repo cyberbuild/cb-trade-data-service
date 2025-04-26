@@ -1,5 +1,5 @@
 from typing import Dict
-from src.exchange_source.interfaces import IExchangeAPIClient, IDataSourceConnector
+from exchange_source.interfaces import IExchangeAPIClient, IDataSourceConnector
 
 class PluginRegistry:
     def __init__(self):

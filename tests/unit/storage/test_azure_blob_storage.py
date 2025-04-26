@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 import pytest
 from unittest.mock import MagicMock, patch
 # Import relative to the 'data-service' directory
-from src.storage.implementations.azure_blob_storage import AzureBlobStorage
+from storage.implementations.azure_blob_storage import AzureBlobStorage
 from datetime import datetime, timezone
 
 @pytest.fixture
@@ -15,14 +15,14 @@ def azure_storage():
     # Assuming azure_blob_storage.py imports BlobServiceClient like:
     # from azure.storage.blob import BlobServiceClient
     # If it's different, this path needs adjustment.
-    with patch('src.storage.implementations.azure_blob_storage.BlobServiceClient') as mock_service_client:
+    with patch('storage.implementations.azure_blob_storage.BlobServiceClient') as mock_service_client:
         mock_container = MagicMock()
         mock_service_client.from_connection_string.return_value.get_container_client.return_value = mock_container
         storage = AzureBlobStorage('fake-conn-str', 'test-container')
         yield storage, mock_container
 
 # Patch based on the import path within the module under test
-@patch('src.storage.implementations.azure_blob_storage._parse_timestamp', lambda x: x)
+@patch('storage.implementations.azure_blob_storage._parse_timestamp', lambda x: x)
 def test_save_entry(azure_storage):
     storage, mock_container = azure_storage
     mock_blob = MagicMock()
@@ -42,7 +42,7 @@ def test_get_range(azure_storage):
     mock_container.get_blob_client.return_value = mock_blob_client
 
     # Patch _parse_timestamp to always return a timezone-aware datetime
-    with patch('src.storage.implementations.azure_blob_storage._parse_timestamp', return_value=datetime(2024, 1, 1, tzinfo=timezone.utc)):
+    with patch('storage.implementations.azure_blob_storage._parse_timestamp', return_value=datetime(2024, 1, 1, tzinfo=timezone.utc)):
         result = storage.get_range('binance', 'BTC', 0, 2)
         assert isinstance(result, list)
         assert result[0]['data']['foo'] == 'bar'

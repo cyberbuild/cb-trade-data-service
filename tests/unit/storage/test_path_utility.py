@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from datetime import datetime
 import pytest
 # Import relative to the 'data-service' directory
-from src.storage.path_utility import StoragePathUtility
+from storage.path_utility import StoragePathUtility
 
 # Valid inputs (exchange, coin, timestamp)
 def test_valid_inputs_datetime():
