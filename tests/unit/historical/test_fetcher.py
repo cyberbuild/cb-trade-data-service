@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from historical.fetcher import HistoricalFetcher
 
 class DummyStorageManager:
-    def get_raw_data_range(self, exchange_name, coin_symbol, start_time, end_time, limit=None, offset=None):
+    def get_range(self, exchange_name, coin_symbol, start_time, end_time, limit=None, offset=None):
         self.called_with = {
             'exchange_name': exchange_name,
             'coin_symbol': coin_symbol,

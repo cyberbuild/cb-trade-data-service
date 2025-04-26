@@ -7,6 +7,7 @@ if src_path not in sys.path:
 
 import pytest
 from dotenv import load_dotenv
+import shutil
 
 @pytest.fixture(scope="session", autouse=True)
 def load_test_env():
@@ -106,3 +107,13 @@ def local_backend():
         os.environ['STORAGE_BACKEND'] = original_value
     else:
         os.environ.pop('STORAGE_BACKEND', None)
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_system():
+    """
+    Cleanup the test_system directory after all tests complete.
+    """
+    yield
+    test_system_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'test_system'))
+    if os.path.exists(test_system_path):
+        shutil.rmtree(test_system_path, ignore_errors=True)

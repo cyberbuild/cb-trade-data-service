@@ -93,3 +93,7 @@ Pipfile.lock
 # Ignore local environment files to prevent committing secrets
 .env
 .env.test
+
+# Test and temp system folders
+system/
+test_system/

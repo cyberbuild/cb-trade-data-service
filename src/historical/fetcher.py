@@ -10,7 +10,12 @@ class HistoricalFetcher:
         Fetch historical data for a coin and exchange from storage within a time range.
         Returns a list of data entries, or an empty list if none found.
         """
-        return self._storage_manager.get_raw_data_range(
+        # Ensure limit and offset are integers if not provided
+        if limit is None:
+            limit = 1000
+        if offset is None:
+            offset = 0
+        return self._storage_manager.get_range(
             exchange_name=exchange,
             coin_symbol=coin,
             start_time=start_time,
