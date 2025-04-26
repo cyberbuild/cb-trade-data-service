@@ -151,22 +151,31 @@ Testing Framework: All tests will be implemented using pytest.
 - Test delegation of start_realtime_stream to a mock plugin: verify the call is made with correct arguments.
 - Test plugin discovery mechanism (if implemented): verify correct plugins are loaded and registered on startup.
 
-### 2.4 Implement a Basic/Mock IExchangeAPIClient Plugin:
-- Create a simple class (e.g., MockExchangeClient or BasicExchangeClient) that implements IExchangeAPIClient.
-- Step 1: Create a Python file for the mock plugin at the following path: data-service/src/data_source/plugins/mock_exchange.py.
-- Step 2: Define the MockExchangeClient (or similar) class within this file, inheriting from IExchangeAPIClient.
-- For fetch_historical_data and start_realtime_stream, initially return/yield mock data or minimal real data from a file/small API call.
-- Implement check_coin_availability to return a predefined result.
-- Implement get_exchange_name to return a unique identifier.
-- Implement a mechanism for this plugin to be discovered and registered with the PluginRegistry in the Data Service startup.
+### 2.4 Implement a Concrete CCXT IExchangeAPIClient Plugin:
+
+Implement a concrete class `CCXTExchangeClient` that implements `IExchangeAPIClient` using the CCXT library to interact with various exchanges.
+- Step 1: Create a Python file for the CCXT plugin at the following path: `data-service/src/data_source/plugins/ccxt_exchange.py`.
+- Step 2: Define the `CCXTExchangeClient` class within this file, inheriting from `IExchangeAPIClient`.
+- Implement the `get_exchange_name` method to return the name of the exchange instance (e.g., `"crypto.com"` for Crypto.com).
+- Note: Use the Crypto.com exchange via CCXT for fetching historical OHLC data, as it provides up to two weeks of historical data.
+- Note: Other CCXT-supported exchanges (e.g., Binance, Kraken, Coinbase) were tested but could not fulfill the two-week historical data requirement.
+- Implement the `check_coin_availability` method using CCXT to fetch available markets from the exchange.
+- Implement the `fetch_historical_data` method using the exchange's OHLC REST API via CCXT, handling pagination, rate limits, and translating data to the standardized internal format.
+- Implement the `start_realtime_stream` method using the exchange's WebSocket API via CCXT (if supported), handling connection management and invoking the provided callback with real-time data translated to the standardized internal format.
+- Implement any required authentication logic for interacting with the exchange API endpoints used.
+- Implement a mechanism for this plugin to be discovered and registered with the `PluginRegistry` in the Data Service startup.
 
 **Test Cases**
-- Test File Path: data-service/tests/unit/data_source/plugins/test_mock_exchange.py
-- Test that the plugin correctly implements all methods of IExchangeAPIClient.
-- Test get_exchange_name returns the expected name.
-- Test check_coin_availability returns the predefined result.
-- Test fetch_historical_data returns the expected mock/basic data structure.
-- Test that start_realtime_stream calls the provided callback with mock/basic data.
+- Test File Path: `data-service/tests/unit/data_source/plugins/test_ccxt_exchange.py`
+- Test that the plugin correctly implements all methods of `IExchangeAPIClient`.
+- Test `get_exchange_name` returns the correct exchange name.
+- Test `check_coin_availability` for a known available market.
+- Test `check_coin_availability` for a non-existing market symbol.
+- Test `fetch_historical_data` for a valid range: verify data is fetched via CCXT, translated, and returned correctly (mocking the CCXT client for unit tests).
+- Test `fetch_historical_data` error handling for invalid inputs or ranges.
+- Test `start_realtime_stream`: verify connection is established and the callback is invoked with real data entries (mocking the CCXT WebSocket client and the callback).
+- Test handling of CCXT rate limits and errors within the plugin.
+- Test data translation logic from CCXT exchange format to internal standard format.
 
 ### 2.5 Refine IRawDataStorage and Implement Multi-Exchange Storage:
 - Update the IRawDataStorage interface and its implementations (LocalFileStorage, AzureBlobStorage stub) to handle storing data with an associated exchange_name (e.g., folder structure like [storage_root]/raw_data/[exchange_name]/[coin_symbol]/...). This is crucial for distinguishing data from different sources.

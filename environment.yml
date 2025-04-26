@@ -1,3 +1,6 @@
+# Prevent Python from writing .pyc files and __pycache__ folders
+PYTHONDONTWRITEBYTECODE=1
+
 name: cb-trade
 channels:
   - defaults

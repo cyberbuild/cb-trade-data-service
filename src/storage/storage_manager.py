@@ -1,4 +1,4 @@
-from ..interfaces import IRawDataStorage, IStorageManager
+from .interfaces import IRawDataStorage, IStorageManager
 
 class StorageManagerImpl(IStorageManager):
     def __init__(self, raw_data_storage: IRawDataStorage):
