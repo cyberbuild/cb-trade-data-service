@@ -2,8 +2,7 @@ import pytest
 import datetime
 import dateutil.parser
 from historical.fetcher import HistoricalFetcher
-from storage.implementations.local_file_storage import LocalFileStorage
-from storage.path_utility import StoragePathUtility
+from storage.backends.local_file_backend import LocalFileBackend
 
 @pytest.fixture
 def storage_path(tmp_path):
@@ -19,7 +18,7 @@ async def local_storage(storage_path):
         type='local',
         local_root_path=str(storage_path)
     )
-    return LocalFileStorage(config)
+    return LocalFileBackend(config)
 
 @pytest.fixture
 def fetcher(local_storage):

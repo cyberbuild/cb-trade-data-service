@@ -9,6 +9,17 @@ import pytest
 from dotenv import load_dotenv
 import shutil
 import asyncio
+import time # Import time for sleep
+import uuid # Import uuid
+from azure.storage.blob.aio import BlobServiceClient # Use async client
+from pathlib import Path # Import Path
+from typing import Generator, AsyncGenerator # Import Generator and AsyncGenerator
+
+# Import backend classes and interfaces
+from storage.backends.local_file_backend import LocalFileBackend
+from storage.backends.azure_blob_backend import AzureBlobBackend
+from storage.interfaces import IStorageBackend, IStorageManager
+from storage.storage_manager import StorageManagerImpl
 
 # Set SelectorEventLoopPolicy for Windows to fix aiodns/aiohttp/azure async issues
 if sys.platform == "win32":
@@ -19,106 +30,146 @@ def load_test_env():
     """
     Automatically load .env.test for all tests in this session.
     """
-    env_path = os.path.join(os.path.dirname(__file__), '../../.env.test')
-    load_dotenv(dotenv_path=env_path, override=True)
-
-@pytest.fixture
-def storage_backend(request):
-    """
-    Fixture to dynamically set the STORAGE_BACKEND environment variable.
-
-    This fixture can be used to switch between 'local' and 'azure' storage backends
-    for integration tests without modifying the .env.test file.
-
-    Usage:
-        @pytest.mark.parametrize("storage_backend", ["local", "azure"], indirect=True)
-        def test_something(storage_backend):
-            # Test with the specified storage backend
-            ...
-
-    Returns:
-        str: The current storage backend value
-    """
-    # Store the original value to restore it after the test
-    original_value = os.environ.get('STORAGE_BACKEND')
-
-    # Get the backend type from parametrize if available
-    backend_type = getattr(request, 'param', 'local')
-
-    # Set the environment variable
-    os.environ['STORAGE_BACKEND'] = backend_type
-
-    # Yield the current value
-    yield backend_type
-
-    # Restore the original value after the test
-    if original_value is not None:
-        os.environ['STORAGE_BACKEND'] = original_value
+    # Correct path relative to conftest.py
+    env_path = Path(__file__).parent.parent / '.env.test'
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=True)
+        print(f"Loaded test environment from: {env_path}")
     else:
-        os.environ.pop('STORAGE_BACKEND', None)
+        print(f"Warning: .env.test file not found at {env_path}")
 
-@pytest.fixture
-def azure_backend():
-    """
-    Fixture to set the STORAGE_BACKEND environment variable to 'azure'.
+# --- Backend Fixtures ---
 
-    This fixture is a convenience wrapper around the storage_backend fixture
-    that always sets the backend to 'azure'.
-
-    Usage:
-        def test_something_with_azure(azure_backend):
-            # Test with Azure storage backend
-            ...
-    """
-    # Store the original value to restore it after the test
-    original_value = os.environ.get('STORAGE_BACKEND')
-
-    # Set the environment variable to 'azure'
-    os.environ['STORAGE_BACKEND'] = 'azure'
-
-    # Yield the current value
-    yield 'azure'
-
-    # Restore the original value after the test
-    if original_value is not None:
-        os.environ['STORAGE_BACKEND'] = original_value
+@pytest.fixture(scope="function")
+def local_backend() -> Generator[IStorageBackend, None, None]:
+    """Fixture for LocalFileBackend using settings from .env.test, cleans up afterwards."""
+    root_path_str = os.environ.get("STORAGE__LOCAL__ROOT_PATH", "./test_data_fallback")
+    # Resolve the path relative to the project root if it's relative
+    local_test_root_dir = Path(root_path_str)
+    if not local_test_root_dir.is_absolute():
+         # Assuming conftest.py is in tests/, project root is parent.parent
+         project_root = Path(__file__).parent.parent
+         local_test_root_dir = (project_root / local_test_root_dir).resolve()
     else:
-        os.environ.pop('STORAGE_BACKEND', None)
+         local_test_root_dir = local_test_root_dir.resolve()
 
-@pytest.fixture
-def local_backend():
-    """
-    Fixture to set the STORAGE_BACKEND environment variable to 'local'.
 
-    This fixture is a convenience wrapper around the storage_backend fixture
-    that always sets the backend to 'local'.
+    if local_test_root_dir.exists():
+        shutil.rmtree(local_test_root_dir, ignore_errors=True) # Use ignore_errors
+    local_test_root_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Using local test directory: {local_test_root_dir}")
 
-    Usage:
-        def test_something_with_local(local_backend):
-            # Test with local storage backend
-            ...
-    """
-    # Store the original value to restore it after the test
-    original_value = os.environ.get('STORAGE_BACKEND')
+    backend = LocalFileBackend(root_path=str(local_test_root_dir))
+    yield backend
 
-    # Set the environment variable to 'local'
-    os.environ['STORAGE_BACKEND'] = 'local'
+    # Teardown: Remove the test directory with retries
+    attempts = 3
+    while attempts > 0:
+        try:
+            if local_test_root_dir.exists():
+                shutil.rmtree(local_test_root_dir)
+                print(f"Cleaned up local test directory: {local_test_root_dir}")
+            break
+        except OSError as e:
+            attempts -= 1
+            if attempts == 0:
+                print(f"Warning: Failed to remove test directory {local_test_root_dir}: {e}")
+            else:
+                print(f"Retrying cleanup for {local_test_root_dir}...")
+                time.sleep(0.5) # Wait briefly before retrying
 
-    # Yield the current value
-    yield 'local'
+@pytest.fixture(scope="function")
+async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixture
+    """Fixture for AzureBlobBackend using settings from .env.test, manages container lifecycle with unique names."""
+    connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
+    base_container_name = os.environ.get("STORAGE__AZURE__CONTAINER_NAME", "test-container-fallback")
 
-    # Restore the original value after the test
-    if original_value is not None:
-        os.environ['STORAGE_BACKEND'] = original_value
+    if not connection_string:
+        pytest.skip("STORAGE__AZURE__CONNECTION_STRING environment variable not set.")
+
+    # Generate a unique container name for this specific test function execution
+    unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
+
+    print(f"Using unique Azure test container: {unique_container_name}")
+    backend = AzureBlobBackend(connection_string=connection_string, container_name=unique_container_name)
+
+    # Use async BlobServiceClient for container management
+    blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+    container_created = False
+    try:
+        # Create container asynchronously
+        try:
+            await blob_service_client.create_container(unique_container_name)
+            container_created = True
+            print(f"Created test container: {unique_container_name}")
+        except Exception as e:
+            # Catch specific exception if possible (e.g., ResourceExistsError)
+            # If it already exists (unlikely with UUID), log warning but proceed
+            print(f"Warning: Could not create container {unique_container_name} (may already exist?): {e}")
+            # Decide if this should be a failure or just a warning
+            # If creation MUST succeed, re-raise or pytest.fail()
+
+        yield backend # Provide the backend instance to the test
+
+    finally:
+        # Teardown: Delete the test container asynchronously only if we attempted creation
+        # This avoids trying to delete if setup failed early
+        # Although the unique name should prevent conflicts, cleanup is good practice
+        try:
+            print(f"Attempting to delete test container: {unique_container_name}")
+            # Add a small delay before attempting deletion (might help with eventual consistency)
+            await asyncio.sleep(2) # Wait 2 seconds
+            await blob_service_client.delete_container(unique_container_name)
+            print(f"Deleted test container: {unique_container_name}")
+        except Exception as e:
+            # Catch specific exception (e.g., ResourceNotFoundError)
+            print(f"Warning: Failed to delete test container {unique_container_name}: {e}")
+        finally:
+            # Ensure the async client is closed
+            await blob_service_client.close()
+
+
+# --- Parameterized StorageManager Fixture ---
+
+@pytest.fixture(params=["local", "azure"], scope="function")
+async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerator[IStorageManager, None]: # Correct type hint for async generator
+    """Fixture providing a StorageManagerImpl configured with either local or azure backend."""
+    if request.param == "local":
+        print("Configuring StorageManager with Local Backend")
+        # local_backend is synchronous, no await needed here
+        manager = StorageManagerImpl(backend=local_backend)
+        yield manager # Yield the manager instance
+        # Cleanup for local is handled by the local_backend fixture teardown
+
+    elif request.param == "azure":
+        # Check if Azure connection string was available (skip handled in azure_backend fixture)
+        connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
+        if not connection_string:
+             pytest.skip("Skipping Azure test as connection string is not set.") # Redundant but safe
+
+        print("Configuring StorageManager with Azure Backend")
+        # azure_backend is an async generator, need to await it if it yielded something complex,
+        # but here it yields the backend instance directly after setup.
+        # We get the already setup backend instance from the fixture injection.
+        manager = StorageManagerImpl(backend=azure_backend)
+        yield manager # Yield the manager instance
+        # Cleanup for Azure is handled by the azure_backend fixture teardown
+
     else:
-        os.environ.pop('STORAGE_BACKEND', None)
+        raise ValueError(f"Unknown backend type requested: {request.param}")
 
+
+# --- Cleanup Fixture ---
+# Keep the cleanup_test_system fixture if it's used elsewhere, otherwise remove if only for old local setup
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_system():
     """
-    Cleanup the test_system directory after all tests complete.
+    Cleanup the old test_system directory if it exists (legacy).
     """
     yield
-    test_system_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'test_system'))
-    if os.path.exists(test_system_path):
+    # Adjust path if necessary, assuming it's relative to project root
+    project_root = Path(__file__).parent.parent
+    test_system_path = project_root / 'test_system'
+    if test_system_path.exists():
+        print(f"Cleaning up legacy test_system directory: {test_system_path}")
         shutil.rmtree(test_system_path, ignore_errors=True)

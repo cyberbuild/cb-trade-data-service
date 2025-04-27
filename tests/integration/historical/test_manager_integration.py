@@ -1,8 +1,7 @@
 import pytest
 import datetime
 from historical.manager import HistoricalDataManagerImpl
-from storage.implementations.local_file_storage import LocalFileStorage
-from storage.path_utility import StoragePathUtility
+from storage.backends.local_file_backend import LocalFileBackend
 
 class DummyWS:
     def __init__(self, fail_on=None):
@@ -27,7 +26,7 @@ async def local_storage(storage_path):
         type='local',
         local_root_path=str(storage_path)
     )
-    return LocalFileStorage(config)
+    return LocalFileBackend(config)
 
 @pytest.mark.integration
 @pytest.mark.asyncio
