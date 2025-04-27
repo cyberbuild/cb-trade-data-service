@@ -1,5 +1,10 @@
 {
-  "copilot.terminal.shellArgs": {
-    "windows": ["/K", "conda activate cb-trade"]
-  }
+  // Ensure VS Code uses the correct conda environment and discovers all tests
+  "python.defaultInterpreterPath": "C:/Users/gregp/anaconda3/envs/cb-trade/python.exe",
+  "python.terminal.activateEnvironment": true,
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

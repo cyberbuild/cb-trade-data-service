@@ -31,12 +31,14 @@ def test_stream_historical_data_sends_chunks_and_complete():
     storage = DummyStorageManager(data=[{"ts": 1}, {"ts": 2}])
     mgr = HistoricalDataManagerImpl(storage)
     mgr.stream_historical_data("BTC", "binance", 1, 2, ws, chunk_size=1)
-    # Should send two chunks and one complete
+    # Should send two data chunks, one final chunk, and one complete
     chunk_types = [m["type"] for m in ws.sent]
-    assert chunk_types.count("historical_data_chunk") == 2
+    assert chunk_types.count("historical_data_chunk") == 3
     assert chunk_types[-1] == "historical_data_complete"
     assert ws.sent[-1]["coin"] == "BTC"
     assert ws.sent[-1]["exchange"] == "binance"
+    # Check that the second-to-last chunk is the final marker
+    assert ws.sent[-2]["data"] == {"final": True}
 
 def test_stream_historical_data_websocket_error():
     ws = DummyWS(fail_on={2})  # Fail on second send

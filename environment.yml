@@ -9,4 +9,17 @@ dependencies:
   - python=3.9
   - pandas
   - numpy
-  - deltalake
+  - pydantic
+  - pydantic-settings
+  - azure-storage-blob
+  - fastapi
+  - uvicorn
+  - websockets
+  - ccxt
+  - pytest
+  - pytest-asyncio
+  - pytest-mock
+  - pytest-dotenv
+  - pytest-timeout
+  - aiofiles
+  - python-dotenv

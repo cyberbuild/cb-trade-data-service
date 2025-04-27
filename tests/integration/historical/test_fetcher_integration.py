@@ -11,10 +11,15 @@ def storage_path(tmp_path):
     return tmp_path / "test_data"
 
 @pytest.fixture
-def local_storage(storage_path):
+async def local_storage(storage_path):
     """Creates a LocalFileStorage instance for testing"""
     storage_path.mkdir(exist_ok=True)
-    return LocalFileStorage(str(storage_path))
+    from config import StorageConfig
+    config = StorageConfig(
+        type='local',
+        local_root_path=str(storage_path)
+    )
+    return LocalFileStorage(config)
 
 @pytest.fixture
 def fetcher(local_storage):
@@ -22,12 +27,13 @@ def fetcher(local_storage):
     return HistoricalFetcher(local_storage)
 
 @pytest.mark.integration
-def test_integration_fetch_data_empty_storage(fetcher):
+@pytest.mark.asyncio
+async def test_integration_fetch_data_empty_storage(fetcher):
     """Test fetching data from empty storage returns empty list"""
     end_time = datetime.datetime.now(datetime.timezone.utc)
     start_time = end_time - datetime.timedelta(hours=1)
     
-    result = fetcher.fetch_data(
+    result = await fetcher.fetch_data(
         coin="BTC",
         exchange="binance",
         start_time=start_time,
@@ -38,7 +44,8 @@ def test_integration_fetch_data_empty_storage(fetcher):
     assert len(result) == 0
 
 @pytest.mark.integration
-def test_integration_fetch_data_with_stored_data(fetcher, local_storage):
+@pytest.mark.asyncio
+async def test_integration_fetch_data_with_stored_data(fetcher, local_storage):
     """Test fetching data when storage contains data"""
     # Prepare test data
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -52,7 +59,7 @@ def test_integration_fetch_data_with_stored_data(fetcher, local_storage):
     }
     
     # Store test data
-    local_storage.save_entry(
+    await local_storage.save_entry(
         exchange_name="binance",
         coin_symbol="BTC",
         timestamp=now,
@@ -63,7 +70,7 @@ def test_integration_fetch_data_with_stored_data(fetcher, local_storage):
     start_time = now - datetime.timedelta(minutes=5)
     end_time = now + datetime.timedelta(minutes=5)
     
-    result = fetcher.fetch_data(
+    result = await fetcher.fetch_data(
         coin="BTC",
         exchange="binance",
         start_time=start_time,
@@ -79,7 +86,8 @@ def test_integration_fetch_data_with_stored_data(fetcher, local_storage):
     assert result[0]["data"]["close"] == test_data["close"]
 
 @pytest.mark.integration
-def test_integration_fetch_data_with_limit_offset(fetcher, local_storage):
+@pytest.mark.asyncio
+async def test_integration_fetch_data_with_limit_offset(fetcher, local_storage):
     """Test fetching data with limit and offset parameters"""
     now = datetime.datetime.now(datetime.timezone.utc)
     
@@ -94,7 +102,7 @@ def test_integration_fetch_data_with_limit_offset(fetcher, local_storage):
             "close": 50500.0 + i,
             "volume": 100.0 + i
         }
-        local_storage.save_entry(
+        await local_storage.save_entry(
             exchange_name="binance",
             coin_symbol="BTC",
             timestamp=timestamp,
@@ -105,7 +113,7 @@ def test_integration_fetch_data_with_limit_offset(fetcher, local_storage):
     start_time = now - datetime.timedelta(minutes=5)
     end_time = now + datetime.timedelta(minutes=30)
     
-    result = fetcher.fetch_data(
+    result = await fetcher.fetch_data(
         coin="BTC",
         exchange="binance",
         start_time=start_time,
@@ -122,7 +130,8 @@ def test_integration_fetch_data_with_limit_offset(fetcher, local_storage):
     assert abs((result_ts - first_ts).total_seconds()) < 2
 
 @pytest.mark.integration
-def test_integration_fetch_data_time_range(fetcher, local_storage):
+@pytest.mark.asyncio
+async def test_integration_fetch_data_time_range(fetcher, local_storage):
     """Test fetching data within a specific time range"""
     base_time = datetime.datetime.now(datetime.timezone.utc)
     
@@ -137,7 +146,7 @@ def test_integration_fetch_data_time_range(fetcher, local_storage):
             "close": 50500.0,
             "volume": 100.0
         }
-        local_storage.save_entry(
+        await local_storage.save_entry(
             exchange_name="binance",
             coin_symbol="BTC",
             timestamp=timestamp,
@@ -148,7 +157,7 @@ def test_integration_fetch_data_time_range(fetcher, local_storage):
     start_time = base_time - datetime.timedelta(hours=1)
     end_time = base_time + datetime.timedelta(hours=1)
     
-    result = fetcher.fetch_data(
+    result = await fetcher.fetch_data(
         coin="BTC",
         exchange="binance",
         start_time=start_time,

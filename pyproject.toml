@@ -7,6 +7,25 @@ name = "data-service"
 version = "0.1.0"
 description = "Cyberbuild Trade Data Service"
 requires-python = ">=3.9"
+dependencies = [
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "aiofiles>=23.1.0", # Add aiofiles for async file I/O
+    # Add other existing runtime dependencies here if any
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-mock",
+    # Add other dev dependencies like mypy, ruff, etc.
+]
+azure = [
+    "azure-storage-blob[aio]>=12.13.0,<13.0.0", # Use async extra for azure-storage-blob
+    "azure-identity", # Often needed for auth
+]
+# Add other optional groups if needed
 
 [tool.setuptools.packages.find]
 where = ["src"]

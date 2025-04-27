@@ -1,5 +1,5 @@
 from typing import List, Any, Optional
-from storage.storage_manager import IStorageManager
+from storage.interfaces import IStorageManager
 
 class HistoricalFetcher:
     def __init__(self, storage_manager: IStorageManager):

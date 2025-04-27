@@ -8,6 +8,11 @@ if src_path not in sys.path:
 import pytest
 from dotenv import load_dotenv
 import shutil
+import asyncio
+
+# Set SelectorEventLoopPolicy for Windows to fix aiodns/aiohttp/azure async issues
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 @pytest.fixture(scope="session", autouse=True)
 def load_test_env():
