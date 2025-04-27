@@ -2,13 +2,13 @@ import sys
 import pytest
 import datetime
 from exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
-from config import CCXTConfig
+from exchange_source.config import CCXTConfig  # <-- Update import
 
 class TestCCXTExchangeClient:
     @pytest.fixture
     async def client(self):
         # Provide a default CCXTConfig and exchange_id as required by the new constructor
-        config = CCXTConfig()
+        config = CCXTConfig()  # Use the imported config
         client = CCXTExchangeClient(config, 'cryptocom')
         yield client
         await client.close()

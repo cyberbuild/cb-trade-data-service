@@ -1,6 +1,7 @@
 # filepath: c:\Project\cyberbuild\cb-trade\cb-trade-data-service\src\storage\config.py
 import os
 import logging
+from pathlib import Path # Add this import
 from pydantic import Field, SecretStr, model_validator, ValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal, Union, Optional, Annotated, Any # Add Any
@@ -9,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 # Define settings for Local Storage
 class LocalStorageSettings(BaseSettings):
+    # Allow ignoring extra fields from environment for discriminated union
+    model_config = SettingsConfigDict(extra='ignore')
     # No prefix needed if loaded as part of a parent model with prefix
     # model_config = SettingsConfigDict(env_prefix='STORAGE_')
     type: Literal['local'] = 'local'
@@ -42,7 +45,8 @@ class LocalStorageSettings(BaseSettings):
 
 # Define settings for Azure Storage
 class AzureStorageSettings(BaseSettings):
-    # model_config = SettingsConfigDict(env_prefix='STORAGE_')
+    # Allow ignoring extra fields from environment for discriminated union
+    model_config = SettingsConfigDict(extra='ignore')
     type: Literal['azure'] = 'azure'
     # Use validation_alias for explicit env var mapping
     # The '...' indicates it's required

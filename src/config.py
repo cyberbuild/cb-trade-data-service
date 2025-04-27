@@ -1,11 +1,14 @@
 import logging
 import sys
+from functools import lru_cache # Add this import
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import SecretStr, Field
 from typing import Literal, Dict, Optional
 
 # Import the new storage config structure
 from storage.config import StorageConfig
+# Import the new exchange config structure
+from exchange_source.config import CCXTConfig
 
 # Basic logging configuration (can be refined later)
 logging.basicConfig(
@@ -17,14 +20,6 @@ logging.basicConfig(
     ]
 )
 
-class CCXTConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix='CCXT_')
-
-    default_exchange: str = 'crypto_com' # Example default
-    # Add fields for API keys/secrets if needed by specific exchanges
-    # crypto_com_api_key: Optional[SecretStr] = None
-    # crypto_com_secret: Optional[SecretStr] = None
-
 # Add other config models as needed (e.g., AppConfig for log level)
 
 class Settings(BaseSettings):
@@ -32,6 +27,7 @@ class Settings(BaseSettings):
     # Use the imported StorageConfig discriminated union
     # Pydantic-settings will look for STORAGE_TYPE and load accordingly
     storage: StorageConfig
+    # Use the imported CCXTConfig
     ccxt: CCXTConfig = Field(default_factory=CCXTConfig)
     # Add other nested configs
 
@@ -43,12 +39,11 @@ class Settings(BaseSettings):
         env_nested_delimiter='__' # Use double underscore for nested env vars e.g. STORAGE__AZURE_CONTAINER_NAME
     )
 
-# Instantiate settings once
-settings = Settings()
-
 # Optional: Function to get settings easily
+@lru_cache()
 def get_settings() -> Settings:
-    return settings
+    # Instantiate settings here, ensuring .env is loaded
+    return Settings()
 
 # Example of accessing specific config based on type after loading
 # try:

@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 async def client(): # Make the fixture async
     settings = get_settings()
     # Ensure you have cryptocom credentials in your .env or environment
+    # Pass the specific ccxt config section from the main settings
     _client = CCXTExchangeClient(exchange_id='cryptocom', config=settings.ccxt)
     try:
         yield _client # Provide the client to the tests

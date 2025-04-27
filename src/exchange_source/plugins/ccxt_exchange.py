@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional, Callable, Union
 import datetime
 import asyncio  # Import asyncio
 
-# Use absolute import from package root
-from config import CCXTConfig
+# Use absolute import from package root for the specific config
+from exchange_source.config import CCXTConfig  # <-- Update import
 
 logger = logging.getLogger(__name__)
 

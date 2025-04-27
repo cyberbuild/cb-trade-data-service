@@ -31,7 +31,7 @@ Configuration (e.g., backend type, connection details) is typically handled via 
 *   **`backends/`**: Concrete `IStorageBackend` implementations (`local_file_backend.py`, `azure_blob_backend.py`).
 *   **`storage_manager.py`**:
     *   `StorageManagerImpl`: Implements `IStorageManager`. It holds a configured instance of `IStorageBackend`. It contains the logic for path generation, format handling (using `pyarrow`, `pandas`, `deltalake`), and orchestrates operations with the backend.
-*   **Configuration (`src/config.py`)**:
+*   **Configuration (`src/storage/config.py`)**:
     *   `StorageConfig`: (Example) A Pydantic `BaseSettings` model. Reads environment variables or config files to determine which `IStorageBackend` implementation to instantiate and provides its necessary configuration (root paths, connection strings, container names). This configuration is used to inject the appropriate backend into `StorageManagerImpl`.
 
 ### Diagrams
