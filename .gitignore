@@ -95,5 +95,4 @@ Pipfile.lock
 .env.test
 
 # Test and temp system folders
-system/
-test_system/
+test_data/

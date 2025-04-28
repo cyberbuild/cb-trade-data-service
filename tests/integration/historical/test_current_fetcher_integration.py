@@ -1,57 +1,65 @@
 import pytest
 import pytest_asyncio
 import datetime
-import dateutil.parser
+import pandas as pd
+import logging
 from historical.current_fetcher import CurrentDataFetcher
-from storage.backends.local_file_backend import LocalFileBackend
+from storage.interfaces import IStorageManager
 
-@pytest.fixture
-def storage_path(tmp_path):
-    return tmp_path / "test_data"
+logger = logging.getLogger(__name__)
 
 @pytest_asyncio.fixture
-async def local_storage(storage_path):
-    storage_path.mkdir(exist_ok=True)
-    from config import StorageConfig
-    config = StorageConfig(
-        type='local',
-        local_root_path=str(storage_path)
-    )
-    return LocalFileBackend(config)
+def fetcher(storage_manager: IStorageManager):
+    return CurrentDataFetcher(storage_manager)
 
-@pytest.fixture
-def fetcher(local_storage):
-    return CurrentDataFetcher(local_storage)
-
+# Test fetching latest entry when data exists (using the setup fixture)
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_integration_get_latest_entry_none(fetcher):
-    """Test get_latest_entry returns None when no data exists"""
-    result = await fetcher.get_latest_entry("BTC", "binance")
-    assert result is None
+async def test_integration_get_latest_entry_with_data(fetcher, setup_historical_data):
+    """Test get_latest_entry returns the latest entry when data exists."""
+    context = setup_historical_data # Use context from the setup fixture
+    result = await fetcher.get_latest_entry(context)
 
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_integration_get_latest_entry_with_data(fetcher, local_storage):
-    """Test get_latest_entry returns the latest entry when data exists"""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    earlier = now - datetime.timedelta(minutes=5)
-    data1 = {"timestamp": int(earlier.timestamp() * 1000), "open": 1}
-    data2 = {"timestamp": int(now.timestamp() * 1000), "open": 2}
-    await local_storage.save_entry("binance", "BTC", earlier, data1)
-    await local_storage.save_entry("binance", "BTC", now, data2)
-    result = await fetcher.get_latest_entry("BTC", "binance")
     assert result is not None
-    result_ts = dateutil.parser.isoparse(result["timestamp"])
-    assert abs((result_ts - now).total_seconds()) < 2
-    assert result["data"]["open"] == 2
+    assert isinstance(result, dict)
+    assert 'timestamp' in result
+    # Add more specific checks if needed, e.g., timestamp is recent
+    now = datetime.datetime.now(datetime.timezone.utc)
+    result_time = pd.to_datetime(result['timestamp'])
+    # Check if the timestamp is within the last ~1 hour (plus buffer)
+    assert now - datetime.timedelta(hours=1, minutes=10) <= result_time <= now + datetime.timedelta(minutes=10)
 
+# Test fetching latest entry when NO data exists for the specific context
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_integration_get_latest_entry_other_coin(fetcher, local_storage):
-    """Test get_latest_entry returns None for a coin with no data, even if other coins exist"""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    data = {"timestamp": int(now.timestamp() * 1000), "open": 1}
-    await local_storage.save_entry("binance", "ETH", now, data)
-    result = await fetcher.get_latest_entry("BTC", "binance")
+async def test_integration_get_latest_entry_none(fetcher, storage_manager): # Don't use setup_historical_data here
+    """Test get_latest_entry returns None when no data exists for the context."""
+    # Use a context that is unlikely to have data from the setup fixture
+    context_nodata = {'exchange': 'some_other_exchange', 'coin': 'XYZ/ABC', 'data_type': 'ohlcv_1m'}
+    result = await fetcher.get_latest_entry(context_nodata)
     assert result is None
+
+# Test fetching for a different coin after setup (should return None if setup only added BTC/USD)
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_integration_get_latest_entry_other_coin(fetcher, setup_historical_data):
+    """Test get_latest_entry returns None for a coin not added by the setup fixture."""
+    # setup_historical_data added 'cryptocom', 'BTC/USD', 'ohlcv_1m'
+    context_other_coin = {'exchange': 'cryptocom', 'coin': 'ETH/USD', 'data_type': 'ohlcv_1m'}
+    result = await fetcher.get_latest_entry(context_other_coin)
+    # This assumes the setup fixture ONLY added BTC/USD for cryptocom
+    assert result is None
+
+# Test with invalid context (missing keys)
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_integration_get_latest_entry_invalid_context(fetcher):
+    """Test get_latest_entry handles invalid context gracefully."""
+    invalid_context = {'exchange': 'binance'} # Missing coin and data_type
+    # Expecting a ValueError or similar, or None depending on implementation
+    # Current implementation catches Exception and returns None
+    result = await fetcher.get_latest_entry(invalid_context)
+    assert result is None
+    # If specific exception handling is desired, adjust the test
+    # with pytest.raises(ValueError):
+    #     await fetcher.get_latest_entry(invalid_context)

@@ -173,3 +173,22 @@ def cleanup_test_system():
     if test_system_path.exists():
         print(f"Cleaning up legacy test_system directory: {test_system_path}")
         shutil.rmtree(test_system_path, ignore_errors=True)
+
+import pytest
+from pathlib import Path
+
+@pytest.fixture(scope="session", autouse=True)
+def check_no_data_dirs_after_tests():
+    yield  # Let all tests run
+    project_root = Path(__file__).parent.parent
+    data_dir = project_root / "data"
+    test_data_dir = project_root / "test_data"
+    found = []
+    if data_dir.exists():
+        found.append(str(data_dir))
+    if test_data_dir.exists():
+        found.append(str(test_data_dir))
+    if found:
+        print(f"\n[WARNING] The following data directories exist after tests: {found}\n")
+        # Optionally, uncomment to fail the test suite if these exist:
+        # assert False, f"Unexpected data directories found after tests: {found}"

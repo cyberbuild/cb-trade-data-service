@@ -1,66 +1,46 @@
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta, timezone
-from typing import List, Tuple
 
-# --- Test Data Generation ---
+def create_sample_dataframe(start_time: datetime, periods: int, freq: str = 'T') -> pd.DataFrame:
+    """Creates a sample OHLCV DataFrame for testing.
 
-def generate_test_data(start_dt: datetime, end_dt: datetime, freq_minutes: int = 1) -> pd.DataFrame:
-    """Generates a DataFrame with timestamp and value columns."""
-    if start_dt.tzinfo is None:
-        start_dt = start_dt.replace(tzinfo=timezone.utc)
-    if end_dt.tzinfo is None:
-        end_dt = end_dt.replace(tzinfo=timezone.utc)
+    Args:
+        start_time: The starting timestamp (timezone-aware recommended).
+        periods: Number of data points (rows).
+        freq: Pandas frequency string (e.g., 'T' for minutes, 'H' for hours).
 
-    # Generate timestamps strictly based on frequency
-    timestamps = pd.date_range(start=start_dt, end=end_dt, freq=f'{freq_minutes}min', tz='UTC')
+    Returns:
+        A Pandas DataFrame with timestamp and OHLCV columns.
+    """
+    # Ensure start_time is timezone-aware (UTC)
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
 
-    if timestamps.empty:
-        # Handle cases where the range is smaller than the frequency
-        # Check if start_dt should be included if it's the only point
-        if start_dt <= end_dt:
-             timestamps = pd.DatetimeIndex([start_dt])
-        else:
-             return pd.DataFrame({'timestamp': pd.Series(dtype='datetime64[ns, UTC]'), 'value': pd.Series(dtype='float64')})
+    # Use 'min' instead of deprecated 'T'
+    timestamps = pd.date_range(start=start_time, periods=periods, freq='min', tz=timezone.utc)
 
-    data = {'timestamp': timestamps, 'value': range(len(timestamps))}
+    data = {
+        'timestamp': timestamps,
+        'open': np.random.rand(periods) * 100 + 50000,
+        'high': np.random.rand(periods) * 10 + 50100, # Ensure high >= open
+        'low': np.random.rand(periods) * 10 + 49900,  # Ensure low <= open
+        'close': np.random.rand(periods) * 100 + 50000,
+        'volume': np.random.rand(periods) * 10 + 100
+    }
     df = pd.DataFrame(data)
-    # Ensure timestamp column is timezone-aware UTC
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+
+    # Ensure high is max and low is min of ohlc
+    df['high'] = df[['open', 'high', 'close']].max(axis=1)
+    df['low'] = df[['open', 'low', 'close']].min(axis=1)
+
+    # Convert timestamp to epoch milliseconds (int) as often stored
+    # Or keep as pd.Timestamp depending on storage expectation
+    # df['timestamp'] = (df['timestamp'].astype(np.int64) // 10**6)
+
+    # Add partitioning columns often used with Parquet/Delta
+    df['year'] = df['timestamp'].dt.year
+    df['month'] = df['timestamp'].dt.month
+    df['day'] = df['timestamp'].dt.day
+
     return df
-
-def introduce_gaps(df: pd.DataFrame, gaps_to_introduce: List[Tuple[datetime, datetime]]) -> pd.DataFrame:
-    """Removes data within specified time ranges to create gaps."""
-    df_with_gaps = df.copy()
-    for gap_start, gap_end in gaps_to_introduce:
-        if gap_start.tzinfo is None: gap_start = gap_start.replace(tzinfo=timezone.utc)
-        if gap_end.tzinfo is None: gap_end = gap_end.replace(tzinfo=timezone.utc)
-        df_with_gaps = df_with_gaps[~((df_with_gaps['timestamp'] >= gap_start) & (df_with_gaps['timestamp'] < gap_end))]
-    return df_with_gaps
-
-# --- Data Auditing Helper ---
-
-def find_time_gaps(df: pd.DataFrame, expected_freq: timedelta = timedelta(minutes=1), timestamp_col: str = 'timestamp') -> List[Tuple[datetime, datetime]]:
-    """Identifies time gaps in a DataFrame based on expected frequency."""
-    if df.empty or len(df) < 2:
-        return []
-
-    df = df.sort_values(by=timestamp_col).reset_index(drop=True)
-    df[timestamp_col] = pd.to_datetime(df[timestamp_col], utc=True) # Ensure UTC
-
-    gaps = []
-    time_diffs = df[timestamp_col].diff()
-
-    # Check gap after the first element relative to expected freq (diff is NaT here)
-    # This simple check assumes the first record *should* be preceded by one 'expected_freq' earlier
-    # A more robust check might need a known series start time.
-
-    # Check gaps between subsequent elements
-    gap_indices = time_diffs[time_diffs > expected_freq].index
-
-    for idx in gap_indices:
-        gap_start_time = df.loc[idx - 1, timestamp_col] + expected_freq
-        gap_end_time = df.loc[idx, timestamp_col]
-        if gap_start_time < gap_end_time: # Ensure the calculated gap is valid
-             gaps.append((gap_start_time, gap_end_time))
-
-    return gaps
