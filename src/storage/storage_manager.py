@@ -323,6 +323,15 @@ class StorageManagerImpl(IStorageManager):
             else:
                 raise ValueError(f"Unsupported format_hint for get_range: {fmt}")
 
+            # Always sort by timestamp before applying offset/limit for deterministic slicing
+            if timestamp_col in arrow_table.column_names:
+                # Convert to pandas, sort, and back to arrow for correct slicing
+                df_temp = arrow_table.to_pandas()
+                df_temp = df_temp.sort_values(timestamp_col).reset_index(drop=True)
+                arrow_table = pa.Table.from_pandas(df_temp, preserve_index=False)
+            else:
+                logger.warning(f"Timestamp column '{timestamp_col}' not found for sorting. Slicing may be non-deterministic.")
+
             # Apply limit and offset (after all filtering)
             if offset > 0:
                 arrow_table = arrow_table.slice(offset)

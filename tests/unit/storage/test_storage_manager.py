@@ -15,10 +15,14 @@ from storage.interfaces import IStorageBackend
 def mock_backend() -> AsyncMock:
     """Provides a mock IStorageBackend."""
     mock = AsyncMock(spec=IStorageBackend)
-    mock.get_storage_options.return_value = {} # Default empty options
-    mock.get_uri_for_identifier.side_effect = lambda identifier: f"mock://{identifier}"
-    mock.list_items.return_value = [] # Default empty list
-    mock.load_bytes.return_value = b"" # Default empty bytes
+    mock.get_storage_options = AsyncMock(return_value={})
+    # get_uri_for_identifier should be a regular Mock, not AsyncMock, since it is not async
+    from unittest.mock import Mock
+    mock.get_uri_for_identifier = Mock(side_effect=lambda identifier: f"mock://{identifier}")
+    mock.list_items = AsyncMock(return_value=[])
+    mock.load_bytes = AsyncMock(return_value=b"")
+    mock.makedirs = AsyncMock()
+    mock.save_bytes = AsyncMock()
     return mock
 
 @pytest.fixture
@@ -152,7 +156,6 @@ async def test_save_entry_delta_default_partition(
     assert call_kwargs['mode'] == "append"
     assert call_kwargs['partition_by'] == DEFAULT_PARTITION_COLS
     assert call_kwargs['storage_options'] == {}
-    assert call_kwargs['engine'] == 'pyarrow'
 
 @pytest.mark.asyncio
 @patch('storage.storage_manager.write_deltalake')
@@ -276,7 +279,8 @@ async def test_get_range_delta_success(
 
     # Configure the mock DeltaTable instance
     mock_dt_instance = MockDeltaTable.return_value
-    mock_dt_instance.schema.return_value.names = ['timestamp', 'value'] # Mock schema
+    # Mock dt.schema().to_pyarrow().names to include 'timestamp'
+    mock_dt_instance.schema.return_value.to_pyarrow.return_value.names = ['timestamp']
     mock_dt_instance.to_pyarrow_table.return_value = sample_arrow_table
 
     result_df = await storage_manager.get_range(

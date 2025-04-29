@@ -16,6 +16,8 @@ from storage.interfaces import IStorageManager # Keep this for type hinting
 
 # Import helpers from the shared location
 from tests.helpers.storage.data_utils import generate_test_data, introduce_gaps, find_time_gaps
+from exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
+from config import get_settings
 
 # --- Configuration ---
 # Configuration is now handled by conftest.py loading .env.test
@@ -37,7 +39,8 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     # 1. Define Time Range (3 days)
     day1_start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     day1_end = datetime(2024, 1, 1, 23, 59, 59, tzinfo=timezone.utc)
-    day2_start = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+    # Start day2 at 01:00 to create a midnight gap
+    day2_start = datetime(2024, 1, 2, 1, 0, 0, tzinfo=timezone.utc)
     day2_end = datetime(2024, 1, 2, 23, 59, 59, tzinfo=timezone.utc)
     day3_start = datetime(2024, 1, 3, 0, 0, 0, tzinfo=timezone.utc)
     day3_end = datetime(2024, 1, 3, 23, 59, 59, tzinfo=timezone.utc)
@@ -45,23 +48,58 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     full_range_end = day3_end
     freq_minutes = 60 # Use hourly data for simplicity
 
-    # 2. Generate Initial Data (with gaps)
-    print("Generating initial data with gaps...")
-    df_day1 = generate_test_data(day1_start, day1_end, freq_minutes)
-    df_day2 = generate_test_data(day2_start, day2_end, freq_minutes)
-    df_day3 = generate_test_data(day3_start, day3_end, freq_minutes)
+    # 2. Fetch Initial Data (with gaps) from CCXTExchange
+    print("Fetching initial data from CCXTExchange...")
+    settings = get_settings()
+    ccxt_client = CCXTExchangeClient(config=settings.ccxt, exchange_id='binance')
+    coin_symbol = 'BTC/USDT'
+    interval = '1h'
+    candles_day1 = await ccxt_client.fetch_historical_data(coin_symbol, day1_start, day1_end, interval=interval)
+    candles_day2 = await ccxt_client.fetch_historical_data(coin_symbol, day2_start, day2_end, interval=interval)
+    candles_day3 = await ccxt_client.fetch_historical_data(coin_symbol, day3_start, day3_end, interval=interval)
+    df_day1 = pd.DataFrame(candles_day1)
+    df_day2 = pd.DataFrame(candles_day2)
+    df_day3 = pd.DataFrame(candles_day3)
+    for df in [df_day1, df_day2, df_day3]:
+        if not df.empty:
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
+            df['year'] = df['timestamp'].dt.year
+            df['month'] = df['timestamp'].dt.month
+            df['day'] = df['timestamp'].dt.day
+            if 'value' not in df.columns:
+                df['value'] = range(len(df))
 
-    # Introduce gaps: e.g., missing 2 hours on day 2, 1 hour crossing midnight day 2 -> day 3
-    gap1_start = datetime(2024, 1, 2, 10, 0, 0, tzinfo=timezone.utc)
-    gap1_end = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc) # Missing 10:00, 11:00
-    gap2_start = datetime(2024, 1, 2, 23, 30, 0, tzinfo=timezone.utc)
-    gap2_end = datetime(2024, 1, 3, 0, 30, 0, tzinfo=timezone.utc) # Missing 23:00 (day2), 00:00 (day3)
+    # Remove 12:00 from day1 to create a midday gap
+    df_day1 = df_day1[df_day1['timestamp'].dt.hour != 12]
 
-    df_day2_gaps = introduce_gaps(df_day2, [(gap1_start, gap1_end), (gap2_start, gap2_end)])
-    df_day3_gaps = introduce_gaps(df_day3, [(gap2_start, gap2_end)])
+    # Fetch all records for the full range (no gaps)
+    all_candles = []
+    for day_start, day_end in [
+        (day1_start, day1_end),
+        (datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc), day2_end),  # day2 full range
+        (day3_start, day3_end)
+    ]:
+        all_candles.extend(await ccxt_client.fetch_historical_data(coin_symbol, day_start, day_end, interval=interval))
+    df_all = pd.DataFrame(all_candles)
+    if not df_all.empty:
+        df_all['timestamp'] = pd.to_datetime(df_all['timestamp'], unit='ms', utc=True)
+        df_all['year'] = df_all['timestamp'].dt.year
+        df_all['month'] = df_all['timestamp'].dt.month
+        df_all['day'] = df_all['timestamp'].dt.day
+        if 'value' not in df_all.columns:
+            df_all['value'] = range(len(df_all))
 
-    initial_data_with_gaps = pd.concat([df_day1, df_day2_gaps, df_day3_gaps], ignore_index=True)
-    print(f"Initial data size: {len(initial_data_with_gaps)} rows")
+    # Define which timestamps to gap
+    gap_timestamps = [
+        datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),  # midday gap
+        datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)    # midnight gap
+    ]
+    gap_records = df_all[df_all['timestamp'].isin(gap_timestamps)].copy()
+    initial_data_with_gaps = df_all[~df_all['timestamp'].isin(gap_timestamps)].copy()
+    print(f"Initial data size: {len(initial_data_with_gaps)} rows (gaps: {len(gap_records)})")
+
+    # Introduce gap at midnight between day1 and day2 (already done by starting day2 at 01:00)
+    # No need to remove more rows for that gap
 
     # 3. Save Initial Data (Delta format, default partitioning)
     print("Saving initial data...")
@@ -95,45 +133,23 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     print(f"Found gaps: {gaps}")
 
     # Assert the specific gaps we introduced are found
-    # Note: Exact comparison of datetimes can be tricky; compare ranges or timestamps within tolerance
-    assert any(g[0] == gap1_start and g[1] == gap1_end for g in gaps), "Gap 1 not detected"
-    # Gap 2 crosses midnight, check if detected correctly (might appear as two gaps depending on find_time_gaps logic)
-    assert any(g[0] == datetime(2024, 1, 2, 23, 0, 0, tzinfo=timezone.utc) + expected_freq_delta and \
-               g[1] == datetime(2024, 1, 3, 0, 0, 0, tzinfo=timezone.utc) for g in gaps) or \
-           any(g[0] == datetime(2024, 1, 3, 0, 0, 0, tzinfo=timezone.utc) + expected_freq_delta and \
-               g[1] == datetime(2024, 1, 3, 1, 0, 0, tzinfo=timezone.utc) for g in gaps) or \
-           any(g[0] == datetime(2024, 1, 2, 23, 0, 0, tzinfo=timezone.utc) + expected_freq_delta and \
-               g[1] == datetime(2024, 1, 3, 1, 0, 0, tzinfo=timezone.utc) for g in gaps), \
-           "Gap 2 (crossing midnight) not detected correctly" # Adjust assertion based on find_time_gaps output
+    # Instead of expecting a single range, check for each missing timestamp
+    expected_gap_times = gap_timestamps
+    found_gap_times = set(g[0] for g in gaps)
+    for t in expected_gap_times:
+        assert t in found_gap_times, f"Expected gap at {t} not detected. Found: {gaps}"
 
 
     # 6. Generate and Add Missing Records
     print("Generating and adding missing records...")
-    missing_data_dfs = []
-    for gap_start, gap_end in gaps:
-        # Generate only the expected timestamps within the gap range
-        # Use inclusive='left' instead of the deprecated 'closed'
-        missing_timestamps = pd.date_range(
-            start=gap_start, end=gap_end, freq=f'{freq_minutes}min', inclusive='left', tz='UTC' # Changed T to min
-        )
-        if not missing_timestamps.empty:
-            # Create a DataFrame for these specific timestamps
-            # Assign values based on index or some other logic if needed
-            missing_df = pd.DataFrame({
-                timestamp_col: missing_timestamps,
-                'value': range(len(missing_timestamps)) # Simple value assignment
-            })
-            missing_data_dfs.append(missing_df)
-
-    if missing_data_dfs:
-        missing_data_combined = pd.concat(missing_data_dfs, ignore_index=True)
-        print(f"Adding {len(missing_data_combined)} missing rows...")
+    if not gap_records.empty:
+        print(f"Adding {len(gap_records)} missing rows...")
         await storage_manager.save_entry(
             context=test_context,
-            data=missing_data_combined,
+            data=gap_records,
             format_hint="delta",
-            mode="append" # Append the missing data
-            , timestamp_col=timestamp_col # Pass timestamp_col
+            mode="append", # Append the missing data
+            timestamp_col=timestamp_col # Pass timestamp_col
         )
         print("Missing data saved.")
     else:
@@ -152,23 +168,23 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     )
     print(f"Retrieved {len(retrieved_data_after_fill)} rows after filling gaps.")
 
-    # Check total count - should match original full data count
-    full_original_data = pd.concat([df_day1, df_day2, df_day3], ignore_index=True)
-    assert len(retrieved_data_after_fill) == len(full_original_data), "Data count mismatch after filling gaps"
+    # Check total count - should match expected full time index
+    expected_full_index = pd.date_range(
+        start=full_range_start,
+        end=full_range_end,
+        freq=f'{freq_minutes}min',
+        tz='UTC'
+    )
+    assert len(retrieved_data_after_fill) == len(expected_full_index), "Data count mismatch after filling gaps"
 
     # Verify no more gaps exist
     gaps_after_fill = find_time_gaps(retrieved_data_after_fill, expected_freq=expected_freq_delta, timestamp_col=timestamp_col) # Pass timestamp_col
     print(f"Gaps after fill: {gaps_after_fill}")
     assert not gaps_after_fill, "Gaps still exist after attempting to fill them"
 
-    # Verify data integrity (e.g., check a specific timestamp that was missing)
-    missing_ts_in_gap1 = datetime(2024, 1, 2, 10, 0, 0, tzinfo=timezone.utc)
-    assert missing_ts_in_gap1 in retrieved_data_after_fill[timestamp_col].tolist(), "Missing timestamp from gap 1 not found after fill"
-    missing_ts_in_gap2_day2 = datetime(2024, 1, 2, 23, 0, 0, tzinfo=timezone.utc)
-    missing_ts_in_gap2_day3 = datetime(2024, 1, 3, 0, 0, 0, tzinfo=timezone.utc)
-    assert missing_ts_in_gap2_day2 in retrieved_data_after_fill[timestamp_col].tolist(), "Missing timestamp from gap 2 (day 2) not found after fill"
-    assert missing_ts_in_gap2_day3 in retrieved_data_after_fill[timestamp_col].tolist(), "Missing timestamp from gap 2 (day 3) not found after fill"
-
+    # Verify data integrity: check that all expected timestamps are present
+    for ts in expected_full_index:
+        assert ts in retrieved_data_after_fill[timestamp_col].tolist(), f"Expected timestamp {ts} not found after fill"
 
     # 8. Append to an Existing Day (e.g., add more data to Day 3)
     print("Appending new data to an existing day...")
@@ -176,6 +192,16 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     append_end = datetime(2024, 1, 3, 11, 30, 0, tzinfo=timezone.utc)
     append_data = generate_test_data(append_start, append_end, freq_minutes=30) # 30 min freq
     append_data['value'] = append_data['value'] + 1000 # Distinguish appended values
+    # Ensure append_data has all columns as in df_all (original schema)
+    for col in df_all.columns:
+        if col not in append_data.columns:
+            if col in ('open', 'high', 'low', 'close', 'volume'):
+                append_data[col] = 0.0
+            elif col in ('year', 'month', 'day'):
+                append_data[col] = getattr(append_data['timestamp'].dt, col)
+            else:
+                append_data[col] = ''
+    append_data = append_data[df_all.columns]
 
     await storage_manager.save_entry(
         context=test_context,
@@ -205,14 +231,16 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     assert retrieved_day3_data[retrieved_day3_data[timestamp_col] == appended_ts]['value'].iloc[0] >= 1000
 
     # Check total count for Day 3
-    expected_day3_count = len(df_day3) + len(append_data)
-    # Account for the fact that the midnight gap fill added 00:00 for day 3
-    if missing_ts_in_gap2_day3 not in df_day3[timestamp_col].tolist():
-         expected_day3_count += 1
-    # Account for potential duplicates if append overlaps - Delta Lake handles this with merge usually, but append might duplicate
-    # Let's retrieve distinct count for robustness if needed, or rely on Delta's behavior.
-    # For this test, assume simple append adds rows.
-    # assert len(retrieved_day3_data) == expected_day3_count # This might be fragile depending on exact overlap logic
+    # Instead of using missing_ts_in_gap2_day3, use the expected time index for Day 3
+    expected_day3_index = pd.date_range(
+        start=day3_start,
+        end=day3_end,
+        freq=f'{freq_minutes}min',
+        tz='UTC'
+    )
+    # Allow for possible duplicates due to append, so check at least all expected timestamps are present
+    for ts in expected_day3_index:
+        assert ts in retrieved_day3_data[timestamp_col].tolist(), f"Expected timestamp {ts} not found in Day 3 data after append"
 
     # 10. Pull a Past Day (Day 1)
     print("Retrieving Day 1 data...")
@@ -225,7 +253,14 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
         timestamp_col=timestamp_col # Pass timestamp_col
     )
     print(f"Retrieved {len(retrieved_day1_data)} rows for Day 1.")
-    assert len(retrieved_day1_data) == len(df_day1), "Mismatch in Day 1 data count"
+    # Instead of comparing to df_day1 (which has the gap), compare to the expected full set for day 1
+    expected_day1_index = pd.date_range(
+        start=day1_start,
+        end=day1_end,
+        freq=f'{freq_minutes}min',
+        tz='UTC'
+    )
+    assert len(retrieved_day1_data) == len(expected_day1_index), "Mismatch in Day 1 data count"
     # Check timestamp range
     assert retrieved_day1_data[timestamp_col].min() >= day1_start
     assert retrieved_day1_data[timestamp_col].max() <= day1_end + timedelta(minutes=freq_minutes) # Allow for end point inclusion
@@ -253,6 +288,7 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     print(f"Existence check for {exchange}/{data_type}/{non_existent_coin.upper()}: {exists_false}")
     assert not exists_false, f"check_coin_exists returned True for a non-existent coin"
 
+    await ccxt_client.aclose()
     print(f"--- Test Flow Completed Successfully --- Backend: {backend_type} ---")
 
 
