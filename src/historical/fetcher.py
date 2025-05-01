@@ -1,5 +1,6 @@
 from typing import List, Any, Optional, Dict, Union
 from storage.interfaces import IStorageManager
+from storage.data_container import ExchangeData
 import pandas as pd
 import pyarrow as pa
 from datetime import datetime
@@ -17,13 +18,13 @@ class HistoricalFetcher:
         offset: int = 0,
         output_format: str = "dataframe",
         **kwargs # Allow extra args like filters, columns for storage manager
-    ) -> Union[pd.DataFrame, pa.Table, List[Dict[str, Any]]]:
+    ) -> ExchangeData:
         """
         Fetch historical data for a given context from storage within a time range.
-        Returns data in the specified format (dataframe, arrow, dict).
+        Returns data wrapped in an ExchangeData container.
         """
-        # Pass context and other relevant arguments directly to storage manager
-        return await self._storage_manager.get_range(
+        # Get the data using storage manager
+        result_data = await self._storage_manager.get_range(
             context=context,
             start_time=start_time,
             end_time=end_time,
@@ -32,3 +33,6 @@ class HistoricalFetcher:
             output_format=output_format,
             **kwargs # Pass any other filters/columns etc.
         )
+        
+        # Return with metadata
+        return ExchangeData(data=result_data, metadata=context.copy())

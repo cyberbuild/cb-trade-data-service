@@ -4,9 +4,9 @@ import shutil
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from ..interfaces import IStorageBackend
 import aiofiles
 import aiofiles.os
+from .istorage_backend import IStorageBackend
 
 logger = logging.getLogger(__name__)
 

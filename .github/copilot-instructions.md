@@ -3,6 +3,7 @@
 - Code is self describing. 
 - Do not litter the code with useless commenting. The code is not your notebook, and not for teaching coding.
 - full implementations. No "concepts", No "Demo", No "Sample", No "Stub"
+- Do not create comments in the code describing the change that was made. The code is self describing.
 
 ## Terminal Commands
 - when using the terminal or executing a command on the command line, the conda environment for this project should be activated. Refer to the environemnt.yml file for the environment definition.

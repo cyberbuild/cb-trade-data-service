@@ -4,10 +4,10 @@ import pytest_asyncio
 import datetime
 import pandas as pd
 import logging
-from typing import Generator
-from storage.interfaces import IStorageBackend, IStorageManager
-from storage.storage_manager import StorageManagerImpl
-from exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
+from typing import Generator    
+from storage.storage_manager import StorageManager, IStorageManager
+from storage.backends.istorage_backend import IStorageBackend
+from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -16,18 +16,10 @@ logger = logging.getLogger(__name__)
 # Note: We request 'local_backend' and 'azure_backend' which are defined in the root conftest.py
 @pytest.fixture(params=["local_backend", "azure_backend"], scope="function")
 def storage_manager(request) -> Generator[IStorageManager, None, None]:
-    """
-    Provides a StorageManagerImpl instance configured with either
-    LocalFileBackend or AzureBlobBackend, based on parametrization.
-    Cleans up the backend after the test.
-    """
     backend_fixture_name = request.param
-    # request.getfixturevalue handles resolving sync/async fixtures
     backend: IStorageBackend = request.getfixturevalue(backend_fixture_name)
-
-    manager = StorageManagerImpl(backend=backend)
+    manager = StorageManager(backend=backend)
     yield manager
-    # No explicit cleanup needed here as backend fixtures handle their own cleanup
 
 @pytest_asyncio.fixture(scope="function")
 async def setup_historical_data(storage_manager: IStorageManager):

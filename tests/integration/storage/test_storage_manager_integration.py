@@ -11,12 +11,12 @@ from typing import Dict, Any, Tuple, Optional, List, Generator
 from pathlib import Path
 
 # Use PEP 420 compliant imports
-from storage.storage_manager import StorageManagerImpl # Keep this if needed directly, though fixture provides it
-from storage.interfaces import IStorageManager # Keep this for type hinting
+from storage.storage_manager import StorageManager, IStorageManager
+
 
 # Import helpers from the shared location
-from tests.helpers.storage.data_utils import generate_test_data, introduce_gaps, find_time_gaps
-from exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
+from tests.helpers.storage.data_utils import generate_test_data, find_time_gaps
+from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
 from config import get_settings
 
 # --- Configuration ---
@@ -278,13 +278,23 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     assert coin_symbol.upper() in coins, f"Test coin '{coin_symbol.upper()}' not found in list_coins result"
 
     # Check existence using uppercase
-    exists = await storage_manager.check_coin_exists(exchange_name=exchange, coin_symbol=coin_symbol.upper(), data_type=data_type)
+    exists = await storage_manager.check_coin_exists(
+        exchange_name=exchange,
+        coin_symbol=coin_symbol.upper(),
+        data_type=data_type,
+        interval=test_context['interval']
+    )
     print(f"Existence check for {exchange}/{data_type}/{coin_symbol.upper()}: {exists}")
     assert exists, f"check_coin_exists returned False for the test coin"
 
     non_existent_coin = "NONEXISTENTCOIN"
     # Check non-existent coin (also uppercase for consistency if needed, though case might not matter for non-existence check)
-    exists_false = await storage_manager.check_coin_exists(exchange_name=exchange, coin_symbol=non_existent_coin.upper(), data_type=data_type)
+    exists_false = await storage_manager.check_coin_exists(
+        exchange_name=exchange,
+        coin_symbol=non_existent_coin.upper(),
+        data_type=data_type,
+        interval=test_context['interval']
+    )
     print(f"Existence check for {exchange}/{data_type}/{non_existent_coin.upper()}: {exists_false}")
     assert not exists_false, f"check_coin_exists returned True for a non-existent coin"
 
@@ -304,7 +314,8 @@ async def test_storage_manager_integration_flow(storage_manager: IStorageManager
     test_context = {
         'data_type': 'test_ohlcv',
         'exchange': 'test_exchange',
-        'coin': f'TEST_COIN_{uuid.uuid4().hex[:6]}' # Use unique coin per run
+        'coin': f'TEST_COIN_{uuid.uuid4().hex[:6]}',
+        'interval': '5m'
     }
     # The storage_manager fixture is injected by pytest from conftest.py
     # It will run this test twice, once for local, once for azure.

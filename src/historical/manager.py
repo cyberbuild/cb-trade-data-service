@@ -1,9 +1,10 @@
 from historical.fetcher import HistoricalFetcher
 from historical.current_fetcher import CurrentDataFetcher
 from historical.interfaces import IHistoricalDataManager
+from storage.data_container import ExchangeData
 import asyncio
 import inspect
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 class HistoricalDataManagerImpl(IHistoricalDataManager):
     def __init__(self, storage_manager):
@@ -19,68 +20,86 @@ class HistoricalDataManagerImpl(IHistoricalDataManager):
         # Extract coin/exchange for logging/messaging if needed, but pass context to fetcher
         coin = context.get('coin', 'UNKNOWN')
         exchange = context.get('exchange', 'UNKNOWN')
+        
         while True:
             try:
-                # Pass context directly to fetcher
-                data_chunk = await self._fetcher.fetch_data(
+                # Fetch data as ExchangeData
+                exchange_data = await self._fetcher.fetch_data(
                     context=context,
                     start_time=start,
                     end_time=end,
                     limit=chunk_size,
                     offset=offset,
-                    output_format="dict" # Stream expects dicts
+                    output_format="dict"  # Stream expects dicts
                 )
+                
+                # Extract data from ExchangeData container
+                data_chunk = exchange_data.data
+                
+                # Add metadata to outgoing message
+                metadata = exchange_data.metadata
+                
             except Exception as e:
                 await ws.send_json({"type": "historical_data_error", "error": str(e), "context": context})
                 break
+                
             if not data_chunk:
                 break
 
             try:
                 # Send the whole chunk list at once if ws supports it, or iterate
-                await ws.send_json({"type": "historical_data_chunk", "data": data_chunk, "context": context})
+                await ws.send_json({
+                    "type": "historical_data_chunk", 
+                    "data": data_chunk, 
+                    "metadata": metadata
+                })
                 sent_any = True
-            except Exception as ws_exc:
-                try:
-                    await ws.send_json({"type": "historical_data_error", "error": f"WebSocket send error: {ws_exc}", "context": context})
-                except Exception: pass # Avoid error loops if ws is broken
-                return # Stop streaming on WS error
+            except Exception as e:
+                await ws.send_json({"type": "historical_data_error", "error": str(e), "context": context})
+                break
 
-            offset += len(data_chunk)
+            # If returned data is less than chunk size, we're done
             if len(data_chunk) < chunk_size:
-                break # Fetched last chunk
+                break
+            offset += chunk_size  # Move to next chunk
 
-        # Send completion message if anything was sent
-        if sent_any:
-            try:
-                await ws.send_json({"type": "historical_data_complete", "context": context})
-            except Exception as ws_exc:
-                 # Log error, but don't send another error message over potentially broken ws
-                 print(f"Error sending completion message: {ws_exc}")
-
+        if not sent_any:
+            await ws.send_json({"type": "historical_data_empty", "context": context})
 
     def stream_historical_data(self, context: Dict[str, Any], start, end, ws, chunk_size=1000):
         """
         Streams historical data. Runs async version.
         """
-        # Always return the awaitable coroutine
-        return self._stream_historical_data_async(context, start, end, ws, chunk_size)
+        # If called from sync context, run in event loop
+        if not inspect.iscoroutinefunction(self.stream_historical_data):
+            asyncio.run(self._stream_historical_data_async(context, start, end, ws, chunk_size))
+        else:
+            # If already in async context, just await the coroutine
+            return self._stream_historical_data_async(context, start, end, ws, chunk_size)
 
-
-    async def _get_most_current_data_async(self, context: Dict[str, Any]):
+    async def _get_most_current_data_async(self, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Async method to get the most current data entry using context.
         """
         try:
-            # Pass context directly to current_fetcher
-            return await self._current_fetcher.get_latest_entry(context)
+            # Get data as ExchangeData
+            exchange_data = await self._current_fetcher.get_latest_entry(context)
+            if not exchange_data:
+                return None
+                
+            # Extract and return actual data
+            return exchange_data.data
         except Exception as e:
-            print(f"Error getting current data for {context}: {e}") # Log error
+            print(f"Error getting most current data: {e}")
             return None
 
     def get_most_current_data(self, context: Dict[str, Any]):
         """
         Gets the most current data entry using context. Runs async version.
         """
-        # Always return the awaitable coroutine
-        return self._get_most_current_data_async(context)
+        # If called from sync context, run in event loop
+        if not inspect.iscoroutinefunction(self.get_most_current_data):
+            return asyncio.run(self._get_most_current_data_async(context))
+        else:
+            # If already in async context, just await the coroutine
+            return self._get_most_current_data_async(context)

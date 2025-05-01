@@ -3,8 +3,9 @@ import logging
 from typing import List, Dict, Any, Optional
 from azure.storage.blob.aio import BlobServiceClient, ContainerClient, StorageStreamDownloader
 from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
-from ..interfaces import IStorageBackend
+
 from pathlib import Path
+from .istorage_backend import IStorageBackend
 
 logger = logging.getLogger(__name__)
 

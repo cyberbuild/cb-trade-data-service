@@ -6,7 +6,7 @@ from pydantic import SecretStr, Field
 from typing import Literal, Dict, Optional
 
 # Import the new storage config structure
-from storage.config import StorageConfig
+from storage.storage_settings import StorageConfig
 # Import the new exchange config structure
 from exchange_source.config import CCXTConfig
 

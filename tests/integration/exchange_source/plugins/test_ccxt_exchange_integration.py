@@ -2,7 +2,7 @@
 import pytest
 import datetime
 import logging
-from exchange_source.plugins.ccxt_exchange import CCXTExchangeClient
+from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
 from config import get_settings
 
 logger = logging.getLogger(__name__)

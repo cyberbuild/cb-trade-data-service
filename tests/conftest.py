@@ -18,8 +18,8 @@ from typing import Generator, AsyncGenerator # Import Generator and AsyncGenerat
 # Import backend classes and interfaces
 from storage.backends.local_file_backend import LocalFileBackend
 from storage.backends.azure_blob_backend import AzureBlobBackend
-from storage.interfaces import IStorageBackend, IStorageManager
-from storage.storage_manager import StorageManagerImpl
+from storage.backends.istorage_backend import IStorageBackend
+from storage.storage_manager import IStorageManager, IExchangeRecord, StorageManager, OHLCVStorageManager
 
 # Set SelectorEventLoopPolicy for Windows to fix aiodns/aiohttp/azure async issues
 if sys.platform == "win32":
@@ -132,12 +132,12 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixt
 # --- Parameterized StorageManager Fixture ---
 
 @pytest.fixture(params=["local", "azure"], scope="function")
-async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerator[IStorageManager, None]: # Correct type hint for async generator
-    """Fixture providing a StorageManagerImpl configured with either local or azure backend."""
+async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerator[IStorageManager[IExchangeRecord], None]: # Correct type hint for async generator
+    """Fixture providing a StorageManager configured with either local or azure backend."""
     if request.param == "local":
         print("Configuring StorageManager with Local Backend")
         # local_backend is synchronous, no await needed here
-        manager = StorageManagerImpl(backend=local_backend)
+        manager = StorageManager(backend=local_backend)
         yield manager # Yield the manager instance
         # Cleanup for local is handled by the local_backend fixture teardown
 
@@ -151,7 +151,7 @@ async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerat
         # azure_backend is an async generator, need to await it if it yielded something complex,
         # but here it yields the backend instance directly after setup.
         # We get the already setup backend instance from the fixture injection.
-        manager = StorageManagerImpl(backend=azure_backend)
+        manager = StorageManager(backend=azure_backend)
         yield manager # Yield the manager instance
         # Cleanup for Azure is handled by the azure_backend fixture teardown
 

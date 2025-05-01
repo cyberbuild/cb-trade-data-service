@@ -1,4 +1,5 @@
 from storage.interfaces import IStorageManager
+from storage.data_container import ExchangeData
 from typing import Dict, Any, Optional
 import datetime
 import pandas as pd
@@ -7,11 +8,11 @@ class CurrentDataFetcher:
     def __init__(self, storage_manager: IStorageManager):
         self._storage_manager = storage_manager
 
-    async def get_latest_entry(self, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def get_latest_entry(self, context: Dict[str, Any]) -> Optional[ExchangeData]:
         """
         Retrieve the latest entry for a given context (exchange, coin, data_type) from storage.
         Fetches data from the last 24 hours and returns the entry with the latest timestamp.
-        Returns the latest data entry or None if not found.
+        Returns the latest data wrapped in ExchangeData or None if not found.
         """
         # Define a time range (e.g., last 24 hours)
         end_time = datetime.datetime.now(datetime.timezone.utc)
@@ -35,16 +36,15 @@ class CurrentDataFetcher:
                 return None
 
             # Find the row with the maximum timestamp
-            # Assuming a 'timestamp' column exists and is comparable/sortable
-            # If timestamp is milliseconds epoch, it should work directly.
-            # If it's datetime objects, it should also work.
             latest_entry_row = df.loc[df['timestamp'].idxmax()]
-
-            # Convert the row (Pandas Series) to a dictionary
-            return latest_entry_row.to_dict()
-
+            
+            # Convert to dict for return
+            latest_entry_dict = latest_entry_row.to_dict()
+            
+            # Return as ExchangeData for consistency
+            return ExchangeData(data=latest_entry_dict, metadata=context.copy())
+            
         except Exception as e:
-            # Log the error appropriately
-            print(f"Error fetching latest entry for context {context}: {e}")
-            # Depending on requirements, you might want to return None or re-raise
+            # Log error and return None
+            print(f"Error fetching latest entry: {e}")
             return None
