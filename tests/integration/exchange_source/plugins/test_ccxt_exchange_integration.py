@@ -4,6 +4,7 @@ import datetime
 import logging
 from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
 from config import get_settings
+from exchange_source.models import ExchangeData, OHLCVRecord
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +24,13 @@ async def client(): # Make the fixture async
         logger.info("CCXT client connection closed.")
 
 @pytest.mark.integration
-@pytest.mark.asyncio # Mark test as async
-async def test_integration_check_coin_availability_success(client):
-    logger.info("Running test_integration_check_coin_availability_success...")
-    result = await client.check_coin_availability("BTC/USD") # Await the coroutine
-    logger.info(f"Result for BTC/USD availability: {result}")
-    assert result is True
+@pytest.mark.asyncio
+async def test_check_coin_availability(client):
+    available = await client.check_coin_availability("BTC/USD")
+    assert isinstance(available, bool)
+    assert available is True
+    not_available = await client.check_coin_availability("INVALID/SYMBOL")
+    assert not_available is False
 
 @pytest.mark.integration
 @pytest.mark.asyncio # Mark test as async
@@ -39,40 +41,32 @@ async def test_integration_check_coin_availability_fail(client):
     assert result is False
 
 @pytest.mark.integration
-@pytest.mark.asyncio # Mark test as async
-async def test_integration_fetch_historical_data_short_period(client):
-    logger.info("Running test_integration_fetch_historical_data_short_period...")
+@pytest.mark.asyncio
+async def test_fetch_ohlcv_data_basic(client):
     end_time = datetime.datetime.now(datetime.timezone.utc)
-    start_time = end_time - datetime.timedelta(hours=1)
+    start_time = end_time - datetime.timedelta(minutes=30)
     interval = "5m"
-    logger.info(f"Fetching historical data for BTC/USD from {start_time} to {end_time} with interval {interval}")
-    result = await client.fetch_historical_data("BTC/USD", start_time, end_time, interval=interval) # Await the coroutine
-    logger.info(f"Fetched {len(result)} candles.")
-    assert isinstance(result, list)
-    # Check if data looks reasonable (e.g., timestamps are within range)
-    if result:
-        assert isinstance(result[0], dict)
-        assert 'timestamp' in result[0]
-        # Convert timestamp ms to datetime object for comparison
-        first_timestamp_dt = datetime.datetime.fromtimestamp(result[0]['timestamp'] / 1000, tz=datetime.timezone.utc)
-        last_timestamp_dt = datetime.datetime.fromtimestamp(result[-1]['timestamp'] / 1000, tz=datetime.timezone.utc)
-        logger.info(f"First candle timestamp: {first_timestamp_dt}, Last candle timestamp: {last_timestamp_dt}")
-        # Allow for some buffer as exchange might return slightly outside the exact start/end
-        assert start_time - datetime.timedelta(minutes=10) <= first_timestamp_dt <= end_time + datetime.timedelta(minutes=10)
-        assert start_time - datetime.timedelta(minutes=10) <= last_timestamp_dt <= end_time + datetime.timedelta(minutes=10)
-    else:
-        logger.warning("No candles fetched, skipping detailed checks.")
+    result = await client.fetch_ohlcv_data("BTC/USD", start_time, end_time, interval=interval)
+    assert isinstance(result, ExchangeData)
+    data = result.data
+    assert isinstance(data, list)
+    assert all(isinstance(rec, OHLCVRecord) for rec in data)
+    meta = result.metadata
+    assert meta.data_type == "ohlcv"
+    assert meta.exchange == client.get_exchange_name()
+    assert meta.coin_symbol == "BTC/USD"
+    assert meta.interval == interval
+    assert len(data) > 0
+    first = data[0]
+    assert isinstance(first.timestamp, int)
 
 @pytest.mark.integration
-@pytest.mark.asyncio # Mark test as async
-async def test_integration_fetch_historical_data_invalid_symbol(client):
-    logger.info("Running test_integration_fetch_historical_data_invalid_symbol...")
+@pytest.mark.asyncio
+async def test_fetch_ohlcv_data_invalid_symbol(client):
     end_time = datetime.datetime.now(datetime.timezone.utc)
-    start_time = end_time - datetime.timedelta(hours=1)
-    logger.info(f"Fetching historical data for INVALID/SYMBOL from {start_time} to {end_time}")
-    result = await client.fetch_historical_data("INVALID/SYMBOL", start_time, end_time) # Await the coroutine
-    logger.info(f"Result: {result}")
-    assert result == []
+    start_time = end_time - datetime.timedelta(minutes=30)
+    with pytest.raises(ValueError):
+        await client.fetch_ohlcv_data("INVALID/SYMBOL", start_time, end_time)
 
 @pytest.mark.integration
 @pytest.mark.asyncio # Mark test as async
@@ -84,20 +78,22 @@ async def test_integration_fetch_two_weeks_five_minute_data(client):
     interval = "5m"
     start_time_perf = time.time()
     logger.info(f"Fetching two weeks of 5m data for BTC/USD from {start_dt} to {end_dt}")
-    result = await client.fetch_historical_data("BTC/USD", start_dt, end_dt, interval=interval) # Await the coroutine
+    result = await client.fetch_ohlcv_data("BTC/USD", start_dt, end_dt, interval=interval)
     elapsed = time.time() - start_time_perf
-    row_count = len(result)
+    assert hasattr(result, 'data')
+    data = result.data
+    row_count = len(data)
     logger.info(f"Fetched {row_count} candles in {elapsed:.2f} seconds.")
-    assert isinstance(result, list)
-    assert row_count > 0 # Should fetch a significant number of candles
+    assert isinstance(result, ExchangeData)
+    assert row_count > 0
     # Expected candles: 2 weeks * 7 days/week * 24 hours/day * 12 candles/hour (for 5m interval)
     expected_min_candles = 2 * 7 * 24 * 12 * 0.9 # Allow for some downtime/missing data (10% buffer)
     expected_max_candles = 2 * 7 * 24 * 12 * 1.1 # Allow for slight overfetch
     logger.info(f"Expected candle count between {expected_min_candles:.0f} and {expected_max_candles:.0f}")
     assert expected_min_candles <= row_count <= expected_max_candles
     # Check first and last timestamps
-    first_timestamp_dt = datetime.datetime.fromtimestamp(result[0]['timestamp'] / 1000, tz=datetime.timezone.utc)
-    last_timestamp_dt = datetime.datetime.fromtimestamp(result[-1]['timestamp'] / 1000, tz=datetime.timezone.utc)
+    first_timestamp_dt = datetime.datetime.fromtimestamp(data[0].timestamp / 1000, tz=datetime.timezone.utc)
+    last_timestamp_dt = datetime.datetime.fromtimestamp(data[-1].timestamp / 1000, tz=datetime.timezone.utc)
     logger.info(f"First candle: {first_timestamp_dt}, Last candle: {last_timestamp_dt}")
     # Check if timestamps are roughly within the requested range (allow buffer)
     assert start_dt - datetime.timedelta(minutes=10) <= first_timestamp_dt <= start_dt + datetime.timedelta(minutes=10)

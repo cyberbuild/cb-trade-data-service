@@ -7,7 +7,7 @@ import asyncio
 
 from exchange_source.config import CCXTConfig
 from exchange_source.models import ExchangeData, OHLCVRecord
-from exchange_source.clients import IExchangeAPIClient
+from exchange_source.clients.iexchange_api_client import IExchangeAPIClient
 
 
 logger = logging.getLogger(__name__)
