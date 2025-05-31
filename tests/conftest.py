@@ -2,10 +2,10 @@
 import sys
 import os
 src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
+if src_path not in sys.path:    sys.path.insert(0, src_path)
 
 import pytest
+import pytest_asyncio
 from dotenv import load_dotenv
 import shutil
 import asyncio
@@ -18,11 +18,25 @@ from typing import Generator, AsyncGenerator # Import Generator and AsyncGenerat
 # Import backend classes and interfaces
 from storage.backends.local_file_backend import LocalFileBackend
 from storage.backends.azure_blob_backend import AzureBlobBackend
+
+# Additional imports for setup_historical_data fixture
+import datetime
+import pandas as pd
+import logging
+from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
+from config import get_settings
 from storage.backends.istorage_backend import IStorageBackend
 from storage.storage_manager import IStorageManager, IExchangeRecord, OHLCVStorageManager
 from storage.path_strategy import OHLCVPathStrategy
 from storage.partition_strategy import YearMonthDayPartitionStrategy
 from storage.readerwriter.delta import DeltaReaderWriter
+from storage.readerwriter.delta import DeltaReaderWriter
+from storage.partition_strategy import YearMonthDayPartitionStrategy
+from storage.path_strategy import OHLCVPathStrategy
+from storage.storage_manager import OHLCVStorageManager
+from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
+from config import get_settings
+import datetime
 
 # Set SelectorEventLoopPolicy for Windows to fix aiodns/aiohttp/azure async issues
 if sys.platform == "win32":
@@ -194,3 +208,67 @@ def check_no_data_dirs_after_tests():
         print(f"\n[WARNING] The following data directories exist after tests: {found}\n")
         # Optionally, uncomment to fail the test suite if these exist:
         # assert False, f"Unexpected data directories found after tests: {found}"
+
+logger = logging.getLogger(__name__)
+
+@pytest.fixture(params=["local", "azure"], scope="function")
+async def setup_historical_data(request, local_backend, azure_backend) -> AsyncGenerator[dict, None]:
+    """
+    Fetches recent historical data using CCXT and saves it using the storage_manager.
+    This fixture runs before tests that require pre-populated data.
+    It fetches 1 hour of 1m BTC/USD data from cryptocom.
+    """
+
+    
+    # Create storage manager based on the parameter
+    def make_strategy_kwargs(backend):
+        return {
+            'writer': DeltaReaderWriter(backend),
+            'path_strategy': OHLCVPathStrategy(),
+            'partition_strategy': YearMonthDayPartitionStrategy()
+        }
+    
+    if request.param == "local":
+        storage_manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
+    elif request.param == "azure":
+        connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
+        if not connection_string:
+            pytest.skip("Skipping Azure test as connection string is not set.")
+        storage_manager = OHLCVStorageManager(backend=azure_backend, **make_strategy_kwargs(azure_backend))
+    else:
+        raise ValueError(f"Unknown backend type requested: {request.param}")
+
+    settings = get_settings()
+    ccxt_client = CCXTExchangeClient(exchange_id='cryptocom', config=settings.ccxt)
+    context = {'exchange': 'cryptocom', 'coin': 'BTC/USD', 'data_type': 'ohlcv', 'interval': '1m'}
+    interval = '1m'
+    fetch_duration_hours = 1
+
+    end_time = datetime.datetime.now(datetime.timezone.utc)
+    start_time = end_time - datetime.timedelta(hours=fetch_duration_hours)
+
+    logger.info(f"Setup: Fetching data for {context['coin']} from {start_time} to {end_time}")
+    try:
+        exchange_data = await ccxt_client.fetch_ohlcv_data(
+            coin_symbol=context['coin'],
+            start_time=start_time,
+            end_time=end_time,
+            interval=interval
+        )
+        
+        if exchange_data.data:
+            logger.info(f"Setup: Fetched {len(exchange_data.data)} records.")
+            
+            await storage_manager.save_entry(exchange_data)
+            logger.info(f"Setup: Saved {len(exchange_data.data)} records to storage.")
+            yield context
+        else:
+            logger.warning("Setup: No data fetched from exchange.")
+            yield context
+
+    except Exception as e:
+        logger.error(f"Setup: Error during data fetching/saving: {e}", exc_info=True)
+        pytest.fail(f"Failed to set up historical data: {e}")
+    finally:
+        await ccxt_client.close()
+        logger.info("Setup: Closed CCXT client.")

@@ -183,6 +183,59 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
             logger.error(f"Failed to load data from {base_path}: {e}", exc_info=True)
             raise
             
+    async def get_most_current_data(self, symbol: str, interval: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent data entry for a symbol and interval.
+        
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTC/USD')
+            interval: Interval string (e.g., '1m', '5m')
+            
+        Returns:
+            Dict containing the most recent record or None if no data exists
+        """
+        from exchange_source.models import Metadata
+        
+        metadata = Metadata(
+            data_type='ohlcv',
+            exchange='',  # Will be filled from actual data if needed
+            coin=symbol,
+            interval=interval
+        )
+        
+        base_path = self.path_strategy.generate_base_path(metadata)
+        
+        try:
+            # Load the table and get the latest entry by timestamp
+            table = await self.writer.load_range(
+                self.backend,
+                base_path,
+                start_date=None,  # Load all data to find latest
+                end_date=None,
+                filters=None,
+                columns=None,
+                timestamp_col='timestamp'
+            )
+            
+            if table is None or (hasattr(table, 'num_rows') and table.num_rows == 0):
+                return None
+                
+            # Convert to pandas to easily find max timestamp
+            df = table.to_pandas()
+            if df.empty:
+                return None
+                
+            # Find the row with maximum timestamp
+            latest_row = df.loc[df['timestamp'].idxmax()]
+            return latest_row.to_dict()
+            
+        except TableNotFoundError:
+            logger.warning(f"Table not found at path: {base_path}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting most current data: {e}")
+            return None
+            
     async def check_coin_exists(self, exchange_name: str, coin_symbol: str, data_type: str, interval: Optional[str] = None) -> bool:
         """Checks if any data exists for a specific coin using the path strategy."""
         context = Metadata({

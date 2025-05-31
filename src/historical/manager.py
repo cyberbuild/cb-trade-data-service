@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 
 class HistoricalDataManagerImpl(IHistoricalDataManager):
     def __init__(self, storage_manager):
+        self._storage_manager = storage_manager
         self._fetcher = HistoricalFetcher(storage_manager)
 
     async def _stream_historical_data_async(self, metadata: Metadata, start, end, ws, chunk_size=1000):

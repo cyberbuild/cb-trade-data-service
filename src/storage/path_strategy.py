@@ -22,15 +22,24 @@ class IStoragePathStrategy(ABC):
     def get_metadata(self, path: str) -> Metadata:
         """Rehydrate metadata from a storage path."""
         pass
+    
+    @abstractmethod
+    def get_data_type(self) -> str:
+        """Get the data type handled by this path strategy."""
+        pass
 
 
 class OHLCVPathStrategy(IStoragePathStrategy):
+    def get_data_type(self) -> str:
+        """Get the data type handled by this path strategy."""
+        return 'ohlcv'
+    
     def generate_base_path(self, context: Dict[str, Any]) -> str:
         required_keys = ['exchange', 'coin', 'interval']
         if not all(key in context for key in required_keys):
             raise ValueError(f"Context must contain keys: {required_keys}")
             
-        record_type = 'ohlcv'
+        record_type = self.get_data_type()
         
         exchange = str(context['exchange']).lower().replace(' ', '_').strip()
         coin = str(context['coin']).upper().replace('/', '_').strip()
@@ -46,7 +55,7 @@ class OHLCVPathStrategy(IStoragePathStrategy):
         Generate a path prefix for listing directories.
         This allows for partial contexts (e.g., just exchange and data_type).
         """
-        record_type = 'ohlcv'
+        record_type = self.get_data_type()
         
         # If exchange is provided, include it in the path
         if 'exchange' in context:
@@ -64,8 +73,7 @@ class OHLCVPathStrategy(IStoragePathStrategy):
                     prefix = f"{prefix}/{interval}"
             
             return prefix
-        
-        # If no exchange provided, just return the record type
+          # If no exchange provided, just return the record type
         return record_type
     
     def get_metadata(self, path: str) -> Metadata:
@@ -73,12 +81,12 @@ class OHLCVPathStrategy(IStoragePathStrategy):
         if len(parts) < 4:
             raise ValueError(f"Invalid path: {path}")
         record_type, exchange, coin, interval = parts[:4]
-        if record_type != 'ohlcv':
-            raise ValueError(f"Invalid data_type in path: {record_type}")
+        expected_type = self.get_data_type()
+        if record_type != expected_type:
+            raise ValueError(f"Invalid data_type in path: {record_type}, expected: {expected_type}")
         return Metadata({
             'data_type': record_type,
-            'exchange': exchange,
-            'coin': coin,
+            'exchange': exchange,            'coin': coin,
             'interval': interval
         })
 
