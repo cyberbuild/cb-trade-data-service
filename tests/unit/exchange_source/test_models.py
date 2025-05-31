@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timezone
 
 # Use PEP 420 compliant imports
-from exchange_source.models import BaseExchangeRecord, OHLCVRecord, Metadata, ExchangeData, IExchangeRecord
+from exchange_source.models import BaseExchangeRecord, OHLCVRecord, Metadata, ExchangeData, IExchangeRecord, Format
 
 # --- Fixtures ---
 
@@ -231,14 +231,108 @@ def test_exchange_data_init_single(sample_ohlcv_record, sample_metadata_dict):
     assert exchange_data.record_type == OHLCVRecord
 
 def test_exchange_data_init_empty_list():
-     with pytest.raises(ValueError, match="cannot be initialized with empty data"):
-         ExchangeData([], {}) # Pass empty list explicitly
+    """Test that empty lists no longer raise an exception."""
+    metadata = {'data_type': 'ohlcv', 'exchange': 'test_exchange', 'coin': 'BTC/USD'}
+    exchange_data = ExchangeData([], metadata)
+    assert len(exchange_data.data) == 0
+    assert exchange_data.record_type is None
+
+def test_exchange_data_init_empty_list_allowed():
+    """Test that ExchangeData can now be initialized with empty data."""
+    metadata = {'data_type': 'ohlcv', 'exchange': 'test_exchange', 'coin': 'BTC/USD'}
+    exchange_data = ExchangeData([], metadata)
+    assert len(exchange_data.data) == 0
+    assert exchange_data.record_type is None
+    assert exchange_data.metadata == metadata
 
 def test_exchange_data_properties(sample_ohlcv_records_list, sample_metadata):
     exchange_data = ExchangeData(sample_ohlcv_records_list, sample_metadata)
     assert exchange_data.data == sample_ohlcv_records_list
     assert exchange_data.metadata == sample_metadata
     assert exchange_data.record_type == OHLCVRecord
+
+# Test Format enum
+def test_format_enum():
+    """Test that the Format enum has the expected values."""
+    assert Format.EXCHANGE_DATA.name == 'EXCHANGE_DATA'
+    assert Format.DATAFRAME.name == 'DATAFRAME'
+    assert Format.ARROW.name == 'ARROW'
+    # Check ordering (implementation detail but useful for debugging)
+    assert Format.EXCHANGE_DATA.value < Format.DATAFRAME.value < Format.ARROW.value
+
+# Test convert method
+def test_exchange_data_convert_to_dataframe(sample_ohlcv_records_list, sample_metadata_dict):
+    """Test converting ExchangeData to DataFrame."""
+    exchange_data = ExchangeData(sample_ohlcv_records_list, sample_metadata_dict)
+    
+    # Test convert method with Format.DATAFRAME
+    df = exchange_data.convert(Format.DATAFRAME)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == len(sample_ohlcv_records_list)
+    
+    # Check that timestamp is converted to datetime
+    assert pd.api.types.is_datetime64_any_dtype(df['timestamp'])
+    
+    # Check that other fields are correctly converted
+    assert df['open'].iloc[0] == sample_ohlcv_records_list[0]['open']
+    assert df['high'].iloc[0] == sample_ohlcv_records_list[0]['high']
+    assert df['low'].iloc[0] == sample_ohlcv_records_list[0]['low']
+    assert df['close'].iloc[0] == sample_ohlcv_records_list[0]['close']
+    assert df['volume'].iloc[0] == sample_ohlcv_records_list[0]['volume']
+    
+    # Check timestamps are converted to datetime correctly
+    expected_ts1 = pd.Timestamp(sample_ohlcv_records_list[0]['timestamp'], unit='ms', tz='UTC')
+    expected_ts2 = pd.Timestamp(sample_ohlcv_records_list[1]['timestamp'], unit='ms', tz='UTC')
+    assert df['timestamp'].iloc[0] == expected_ts1
+    assert df['timestamp'].iloc[1] == expected_ts2
+
+def test_exchange_data_to_dataframe(sample_ohlcv_records_list, sample_metadata_dict):
+    """Test the to_dataframe convenience method."""
+    exchange_data = ExchangeData(sample_ohlcv_records_list, sample_metadata_dict)
+    
+    df = exchange_data.to_dataframe()
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == len(sample_ohlcv_records_list)
+    assert pd.api.types.is_datetime64_any_dtype(df['timestamp'])
+    
+    # Verify it's equivalent to using convert method
+    df_convert = exchange_data.convert(Format.DATAFRAME)
+    pd.testing.assert_frame_equal(df, df_convert)
+
+def test_exchange_data_convert_to_arrow(sample_ohlcv_records_list, sample_metadata_dict):
+    """Test converting ExchangeData to PyArrow Table."""
+    exchange_data = ExchangeData(sample_ohlcv_records_list, sample_metadata_dict)
+    
+    # Test convert method with Format.ARROW
+    table = exchange_data.convert(Format.ARROW)
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == len(sample_ohlcv_records_list)
+    
+    # Check that timestamp is converted to timestamp[ms] with UTC timezone
+    assert 'timestamp' in table.column_names
+    timestamp_field = table.schema.field('timestamp')
+    assert timestamp_field.type == pa.timestamp('ms', tz='UTC')
+    
+    # Convert to pandas and verify data
+    df = table.to_pandas()
+    assert len(df) == len(sample_ohlcv_records_list)
+    assert pd.api.types.is_datetime64_any_dtype(df['timestamp'])
+    
+    # Check that values are preserved
+    expected_ts1 = pd.Timestamp(sample_ohlcv_records_list[0]['timestamp'], unit='ms', tz='UTC')
+    assert df['timestamp'].iloc[0] == expected_ts1
+    assert df['open'].iloc[0] == sample_ohlcv_records_list[0]['open']
+
+def test_exchange_data_convert_unsupported_format(sample_ohlcv_records_list, sample_metadata_dict):
+    """Test that convert raises ValueError for unsupported format."""
+    exchange_data = ExchangeData(sample_ohlcv_records_list, sample_metadata_dict)
+    
+    # Mock an unsupported format value
+    class MockFormat:
+        name = 'UNSUPPORTED'
+    
+    with pytest.raises(ValueError, match="Unsupported output format"):
+        exchange_data.convert(MockFormat())
 
 def test_exchange_data_to_arrow(sample_ohlcv_records_list, sample_metadata_dict):
     exchange_data = ExchangeData(sample_ohlcv_records_list, sample_metadata_dict)
@@ -278,3 +372,31 @@ def test_exchange_data_to_arrow_timestamp_conversion(sample_metadata_dict):
     df_int = arrow_table_int.to_pandas()
     assert pd.api.types.is_datetime64_any_dtype(df_int['timestamp'])
     assert df_int['timestamp'].iloc[0] == pd.Timestamp(1678886400000, unit='ms', tz='UTC')
+
+def test_exchange_data_convert_empty():
+    """Test that converting empty ExchangeData works properly."""
+    metadata = {'data_type': 'ohlcv', 'exchange': 'test_exchange', 'coin': 'BTC/USD'}
+    exchange_data = ExchangeData([], metadata)
+    
+    # Test converting empty data to DataFrame
+    df = exchange_data.convert(Format.DATAFRAME)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 0
+    
+    # Test converting empty data to Arrow
+    table = exchange_data.convert(Format.ARROW)
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 0
+    
+    # Test that to_dataframe and to_arrow convenience methods work
+    df2 = exchange_data.to_dataframe()
+    assert isinstance(df2, pd.DataFrame)
+    assert len(df2) == 0
+    
+    table2 = exchange_data.to_arrow()
+    assert isinstance(table2, pa.Table)
+    assert table2.num_rows == 0
+    
+    # Test EXCHANGE_DATA format returns self
+    result = exchange_data.convert(Format.EXCHANGE_DATA)
+    assert result is exchange_data

@@ -75,13 +75,7 @@ class CCXTExchangeClient(IExchangeAPIClient):
             await self._exchange.load_markets()
             if coin_symbol not in self._exchange.markets:
                 logger.error(f"Symbol {coin_symbol} not available on {self.exchange_id}")
-                metadata = {
-                    'data_type': 'ohlcv',
-                    'exchange': self.exchange_id,
-                    'coin': coin_symbol,
-                    'interval': interval
-                }
-                return ExchangeData(data=[], metadata=metadata)
+                raise ValueError(f"Symbol {coin_symbol} not available on {self.exchange_id}")
 
             all_candles = []
             since = start_time
@@ -140,6 +134,8 @@ class CCXTExchangeClient(IExchangeAPIClient):
             
             # Return container with data and metadata properly separated
             return ExchangeData(data=standardized_data, metadata=metadata)
+        except ValueError:
+            raise
         except Exception as e:
             logger.exception(f"Unexpected error fetching historical data for {coin_symbol} on {self.exchange_id}: {e}")
             metadata = {
