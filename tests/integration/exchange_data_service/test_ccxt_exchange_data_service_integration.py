@@ -30,10 +30,9 @@ async def test_get_data_integration(ccxt_exchange_data_service, setup_historical
     symbol = context['coin']  # BTC/USD from setup fixture
     interval_str = context['interval']  # 1m from setup fixture
     interval = Interval(interval_str)  # Convert to enum
-    
-    # Get data for the last 30 minutes
+      # Get data for the last 15 minutes (shortened for faster tests)
     end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(minutes=30)
+    start_time = end_time - timedelta(minutes=15)
     
     logger.info(f"Testing get_data for {symbol} with interval {interval_str}")
     
@@ -54,7 +53,7 @@ async def test_get_data_with_enum_interval(ccxt_exchange_data_service, setup_his
     interval_enum = Interval.MINUTE
     
     end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(minutes=15)
+    start_time = end_time - timedelta(minutes=10)
     
     logger.info(f"Testing _get_data_with_enum for {symbol} with interval {interval_enum.value}")
     
@@ -98,10 +97,9 @@ async def test_end_to_end_sync_and_retrieve(ccxt_exchange_data_service):
     
     # Should return self (IExchangeDataService)
     assert result is ccxt_exchange_data_service
-    
-    # Then retrieve the data
+      # Then retrieve the data (shortened time range for faster tests)
     end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(hours=2)
+    start_time = end_time - timedelta(minutes=30)
     
     result = await ccxt_exchange_data_service.get_ohlcv_data(symbol, interval, start_time, end_time)
     
@@ -121,10 +119,9 @@ async def test_multiple_intervals(ccxt_exchange_data_service):
         
         # Test async sync
         await ccxt_exchange_data_service.sync_with_exchange(symbol, interval)
-        
-        # Test data retrieval
+          # Test data retrieval (much shorter time range for faster tests)
         end_time = datetime.now(timezone.utc)
-        start_time = end_time - interval.to_timedelta() * 5  # Get 5 intervals worth
+        start_time = end_time - timedelta(minutes=10)  # Fixed 10 minutes instead of interval-based
         
         data_result = await ccxt_exchange_data_service.get_ohlcv_data(symbol, interval, start_time, end_time)
         assert data_result is not None

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from exchange_source.models import IExchangeRecord, ExchangeData
+from storage.paging import Paging
 from enum import Enum, auto
 
 class Interval(Enum):
@@ -34,7 +35,8 @@ class Interval(Enum):
     
 class IExchangeDataService(ABC):
     @abstractmethod
-    async def get_ohlcv_data(self, symbol: str, interval: Interval, start: Optional[datetime] = None, end: Optional[datetime] = None) -> ExchangeData:
+    async def get_ohlcv_data(self, symbol: str, interval: Interval, start: Optional[datetime] = None, end: Optional[datetime] = None, paging: Optional[Paging] = None) -> ExchangeData:
+        """Get OHLCV data with optional pagination support"""
         pass
     
     @abstractmethod
