@@ -96,3 +96,6 @@ Pipfile.lock
 
 # Test and temp system folders
 test_data/
+data/
+rel_dir1/
+subdir/
