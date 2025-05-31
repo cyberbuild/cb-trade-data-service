@@ -29,7 +29,3 @@ class IExchangeAPIClient(ABC):
     async def close(self):
         """Close any underlying connections."""
         pass
-
-    async def aclose(self):
-        """Alias for async close, useful for context managers."""
-        await self.close()

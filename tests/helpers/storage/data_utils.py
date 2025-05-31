@@ -78,12 +78,11 @@ def find_time_gaps(df: pd.DataFrame, expected_freq=None, timestamp_col: str = 't
     """Find missing intervals in the DataFrame's timestamp column."""
     if df.empty:
         return []
-    df_sorted = df.sort_values(timestamp_col)
-    ts = pd.to_datetime(df_sorted[timestamp_col])
+    # Normalize timestamps to pandas.Timestamp with UTC and remove duplicates
+    ts = pd.to_datetime(df[timestamp_col], utc=True).drop_duplicates().sort_values()
     if expected_freq is None:
-        # Default to 1 hour
         expected_freq = pd.Timedelta(hours=1)
-    expected = pd.date_range(start=ts.iloc[0], end=ts.iloc[-1], freq=expected_freq, tz=ts.dt.tz)
+    expected = pd.date_range(start=ts.iloc[0], end=ts.iloc[-1], freq=expected_freq, tz='UTC')
     missing = expected.difference(ts)
     gaps = []
     if not missing.empty:
@@ -92,5 +91,6 @@ def find_time_gaps(df: pd.DataFrame, expected_freq=None, timestamp_col: str = 't
         missing_list = list(missing)
         for k, g in groupby(enumerate(missing_list), lambda ix: ix[0] - ix[1].value):
             group = list(map(itemgetter(1), g))
-            gaps.append((group[0].to_pydatetime(), group[-1].to_pydatetime()))
+            # Return as pandas.Timestamp with UTC for robust comparison
+            gaps.append((pd.Timestamp(group[0]).tz_convert('UTC'), pd.Timestamp(group[-1]).tz_convert('UTC')))
     return gaps

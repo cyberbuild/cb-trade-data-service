@@ -2,16 +2,14 @@
 import logging
 from typing import List, Dict, Any, Optional
 from azure.storage.blob.aio import BlobServiceClient, ContainerClient, StorageStreamDownloader
-from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
-
+from azure.core.exceptions import ResourceNotFoundError
 from pathlib import Path
 from .istorage_backend import IStorageBackend
-
 logger = logging.getLogger(__name__)
-
 class AzureBlobBackend(IStorageBackend):
     """Implements IStorageBackend for Azure Blob Storage (compatible with ADLS Gen2)."""
-
+    """Implements IStorageBackend for Azure Blob Storage (compatible with ADLS Gen2)."""
+    
     def __init__(self, connection_string: str, container_name: str):
         if not connection_string:
             raise ValueError("Azure connection string is required.")
@@ -69,6 +67,7 @@ class AzureBlobBackend(IStorageBackend):
         if account_name:
             options['account_name'] = account_name # For fsspec/pyarrow
             options['storage_account'] = account_name # Common alternative name
+            options['azure_storage_account_name'] = account_name # Explicitly for deltalake-python
 
         if account_key:
             options['account_key'] = account_key # For fsspec/pyarrow
@@ -143,6 +142,43 @@ class AzureBlobBackend(IStorageBackend):
             logger.error(f"Error listing blobs under prefix '{prefix}' in container {self.container_name}: {e}")
             raise
         return items
+        
+    async def list_directories(self, prefix: str = "") -> List[str]:
+        """
+        List only directories under a given prefix.
+        
+        In Azure Blob Storage, directories are virtual and inferred from blob paths.
+        This method identifies unique directory paths by finding blobs with the given prefix
+        and extracting the next path segment.
+        """
+        container_client = await self._get_container_client()
+        directories = set()
+        
+        # Ensure prefix ends with / if not empty
+        if prefix and not prefix.endswith('/'):
+            prefix = prefix + '/'
+            
+        try:
+            # List all blobs with this prefix
+            async for blob in container_client.list_blobs(name_starts_with=prefix):
+                # Skip the blob if it's exactly the prefix (unlikely)
+                if blob.name == prefix:
+                    continue
+                    
+                # Extract the relative path from the prefix
+                relative_path = blob.name[len(prefix):] if prefix else blob.name
+                
+                # Get the top-level directory in this relative path
+                if '/' in relative_path:
+                    dir_name = relative_path.split('/')[0]
+                    if dir_name:  # Ensure it's not an empty string
+                        directories.add(prefix + dir_name)
+                        
+            logger.debug(f"Listed {len(directories)} directories under prefix '{prefix}' in container {self.container_name}")
+            return sorted(list(directories))
+        except Exception as e:
+            logger.error(f"Error listing directories under prefix '{prefix}' in container {self.container_name}: {e}")
+            raise
 
     async def exists(self, identifier: str) -> bool:
         """Checks if a blob exists asynchronously."""
@@ -241,8 +277,12 @@ class AzureBlobBackend(IStorageBackend):
 
     async def __aenter__(self):
         await self._get_container_client() # Ensure client is ready
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
-
+        return self    
+        
+        """
+        Returns the base path for this Azure backend (the container name).
+        The actual path structure comes from the path strategy outside the backend.
+        """
+        logger.debug(f"Azure backend returning container name as base: {self.container_name}")
+        return self.container_name
+        return base_path

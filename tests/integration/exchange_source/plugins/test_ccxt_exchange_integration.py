@@ -20,7 +20,7 @@ async def client(): # Make the fixture async
     finally:
         # Cleanup: Close the client connection after tests are done
         logger.info("Closing CCXT client connection...")
-        await _client.aclose() # Use aclose() for async cleanup
+        await _client.close() # Use close() for async cleanup
         logger.info("CCXT client connection closed.")
 
 @pytest.mark.integration

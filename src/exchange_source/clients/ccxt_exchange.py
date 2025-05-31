@@ -36,10 +36,6 @@ class CCXTExchangeClient(IExchangeAPIClient):
         except Exception as e:
             logger.error(f"Error closing connection for exchange {self.exchange_id}: {e}")
 
-    async def aclose(self):
-        """Alias for async close, for compatibility with async test fixtures."""
-        await self.close()
-
     def get_exchange_name(self) -> str:
         return self.exchange_id
 

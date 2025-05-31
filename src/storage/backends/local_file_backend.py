@@ -11,12 +11,11 @@ from .istorage_backend import IStorageBackend
 logger = logging.getLogger(__name__)
 
 class LocalFileBackend(IStorageBackend):
-    """Implements IStorageBackend for the local filesystem."""
-
     def __init__(self, root_path: str):
         self.root_path = Path(root_path).resolve()
         # Ensure root directory exists
         os.makedirs(self.root_path, exist_ok=True)
+        logger.info(f"Initialized LocalFileBackend with root: {self.root_path}")
         logger.info(f"Initialized LocalFileBackend with root: {self.root_path}")
 
     def _get_full_path(self, identifier: str) -> Path:
@@ -99,6 +98,28 @@ class LocalFileBackend(IStorageBackend):
             raise
         return items
 
+    async def list_directories(self, prefix: str = "") -> List[str]:
+        """Lists only directories (not files) under a given prefix."""
+        search_path = self._get_full_path(prefix)
+        directories = []
+        try:
+            if await aiofiles.os.path.isdir(search_path):
+                entries = await aiofiles.os.listdir(search_path)
+                for entry_name in entries:
+                    entry_path = search_path / entry_name
+                    # Only include directories
+                    if await aiofiles.os.path.isdir(entry_path):
+                        relative_path = entry_path.relative_to(self.root_path).as_posix()
+                        directories.append(relative_path)
+                
+            logger.debug(f"Listed {len(directories)} directories under prefix '{prefix}' in {search_path}")
+        except FileNotFoundError:
+            logger.warning(f"Prefix directory not found for listing directories: {search_path}")
+            return [] # Return empty list if prefix doesn't exist
+        except Exception as e:
+            logger.error(f"Error listing directories under prefix '{prefix}' in {search_path}: {e}")
+            raise
+        return directories
 
     async def exists(self, identifier: str) -> bool:
         """Checks if a file or directory exists asynchronously."""
@@ -133,8 +154,19 @@ class LocalFileBackend(IStorageBackend):
         dir_path = full_path.parent if '.' in full_path.name else full_path
         try:
             await aiofiles.os.makedirs(dir_path, exist_ok=exist_ok)
-            logger.debug(f"Ensured directory exists: {dir_path}")
+            logger.debug(f"Ensured directory exists: {dir_path}")        
         except Exception as e:
             logger.error(f"Error creating directory {dir_path}: {e}")
             raise
+            
+    def get_base_path(self, context: Dict[str, Any]) -> str:
+        """
+        Returns the root path as the base path.
+        In local filesystem, the base path is the configured root path.
+        Actual path construction from context should be handled by a path strategy outside the backend.
+        """
+        # In local storage, the root_path is the base
+        # The actual path structure comes from the storage manager's path strategy
+        logger.debug(f"Local backend returning root path as base: {self.root_path}")
+        return str(self.root_path)
 

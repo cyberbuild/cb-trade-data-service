@@ -68,8 +68,8 @@ class IStorageManager(ABC, Generic[TExchangeRecord]):
             Optional[ExchangeData[TExchangeRecord]]: An ExchangeData object containing the requested data,
                                                     or None if not found.
         """
-        pass
-
+        pass    
+    
     @abstractmethod
     async def check_coin_exists(
         self,
@@ -79,6 +79,15 @@ class IStorageManager(ABC, Generic[TExchangeRecord]):
         interval: Optional[str] = None
     ) -> bool:
         """Checks if data exists for a specific coin, exchange, data type, and interval."""
+        pass
+        
+    @abstractmethod
+    async def list_coins(
+        self,
+        exchange_name: str,
+        data_type: str
+    ) -> List[str]:
+        """Lists available coins for a specific exchange and data type."""
         pass
 
 
@@ -110,24 +119,21 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
 
         if not writer:
              raise ValueError("Writer instance must be provided.")
-        self.writer = writer
-
-        # Use provided partition strategy or a default one if applicable
+        self.writer = writer        # Use provided partition strategy or a default one if applicable
         self.partition_strategy = partition_strategy or YearMonthDayPartitionStrategy() # Assuming YearMonthDay is default
-
+        
         logger.info(f"StorageManager initialized with: "
                     f"Backend={type(self.backend).__name__}, "
                     f"PathStrategy={type(self.path_strategy).__name__}, "
-                    # f"Formatter={type(self.formatter).__name__}, " # Formatter removed?
                     f"Writer={type(self.writer).__name__}, "
                     f"PartitionStrategy={type(self.partition_strategy).__name__}")
-
+    
     @property
     @abstractmethod
     def record_type(self) -> Type[TExchangeRecord]:
         """The concrete IExchangeRecord subclass this manager handles."""
         pass
-
+        
     # --- Data Loading ---
     async def get_range(
         self,
@@ -136,9 +142,11 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
         end_date: Optional[datetime] = None,
         columns: Optional[List[str]] = None
     ) -> Optional[ExchangeData[TExchangeRecord]]:
-        base_path = self.path_strategy.get_path(metadata)
+        base_path = self.path_strategy.generate_base_path(metadata)
         logger.info(f"Getting range from {base_path} for {metadata} between {start_date} and {end_date}")
 
+        # Use timestamp_col from metadata if present, else default
+        timestamp_col = getattr(metadata, 'timestamp_col', None) or 'timestamp'
         try:
             table = await self.writer.load_range(
                 self.backend,
@@ -146,16 +154,24 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
                 start_date,
                 end_date,
                 filters=None,
-                columns=columns
+                columns=columns,
+                timestamp_col=timestamp_col
             )
             logger.info(f"Successfully loaded data from {base_path}")
             if table is None or (hasattr(table, 'num_rows') and table.num_rows == 0):
                 return None
-            # If the result is already an ExchangeData, return it
             if isinstance(table, ExchangeData):
                 return table
-            # Otherwise, assume it's a pyarrow Table and convert
-            records = [self.record_type(row) for row in table.to_pylist()]
+            records = []
+            for row in table.to_pylist():
+                # Use the dynamic timestamp_col for conversion
+                if timestamp_col in row and not isinstance(row[timestamp_col], int):
+                    ts = row[timestamp_col]
+                    if hasattr(ts, 'timestamp'):
+                        row[timestamp_col] = int(ts.timestamp() * 1000)
+                    else:
+                        raise TypeError(f"Cannot convert timestamp of type {type(ts)} to int (ms)")
+                records.append(self.record_type(row))
             return ExchangeData(records, metadata)
         except TableNotFoundError:
             logger.warning(f"Table not found at path: {base_path}")
@@ -166,23 +182,56 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
         except Exception as e:
             logger.error(f"Failed to load data from {base_path}: {e}", exc_info=True)
             raise
-
-    async def check_coin_exists(self, exchange_name: str, record_type: str, coin_symbol: str, interval: str) -> bool:
+            
+    async def check_coin_exists(self, exchange_name: str, coin_symbol: str, data_type: str, interval: Optional[str] = None) -> bool:
         """Checks if any data exists for a specific coin using the path strategy."""
         context = Metadata({
-            'record_type': record_type, 
+            'data_type': data_type, 
             'exchange': exchange_name, 
             'coin': coin_symbol,
             'interval': interval 
         })
 
-        prefix = self.path_strategy.get_path(context) + '/' 
+        prefix = self.path_strategy.generate_base_path(context) + '/' 
         logger.debug(f"Checking existence with prefix: {prefix}")
        
-        items = await self.backend.list_items(prefix, limit=1) 
+        items = await self.backend.list_items(prefix)
         exists = bool(items)
         logger.info(f"Existence check for {prefix}: {exists}")
         return exists
+    
+    async def list_coins(self, exchange_name: str, data_type: str) -> List[str]:
+        """
+        Lists all available coins for a specific exchange and data type.
+        
+        Args:
+            exchange_name: The name of the exchange
+            data_type: The type of data (e.g., 'ohlcv')
+            
+        Returns:
+            List[str]: List of coin symbols available
+        """
+        # Create a prefix for the path to search
+        # We'll create a partial context without the coin to get the exchange+data_type directory
+        partial_context = Metadata({
+            'data_type': data_type,
+            'exchange': exchange_name
+        })
+        
+        # Generate the base directory to search
+        base_dir = self.path_strategy.generate_path_prefix(partial_context)
+        logger.debug(f"Listing coins with prefix: {base_dir}")
+        
+        # List all subdirectories (coins) under this path
+        try:
+            items = await self.backend.list_directories(base_dir)
+            # Extract just the coin names (last part of the path)
+            coins = [item.split('/')[-1].upper() for item in items]
+            logger.info(f"Found {len(coins)} coins for {exchange_name}/{data_type}: {coins}")
+            return coins
+        except Exception as e:
+            logger.error(f"Failed to list coins for {exchange_name}/{data_type}: {e}")
+            return []
 
  
     async def save_entry(self, exchange_data: ExchangeData[TExchangeRecord], **kwargs):
@@ -192,9 +241,9 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
         """
         metadata = exchange_data.metadata
         # Ensure data is not empty before proceeding
-        if not exchange_data.data: # Check the original list in ExchangeData
+        if not exchange_data.data:
             logger.warning(f"Attempted to save empty data for {metadata}. Skipping.")
-            return
+            return self
 
         logger.info(f"Saving entry for {metadata}")
 
@@ -208,7 +257,7 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
 
         # 2. Determine path using the path strategy
         try:
-            base_path = self.path_strategy.get_path(metadata)
+            base_path = self.path_strategy.generate_base_path(metadata)
         except Exception as e:
             logger.error(f"Failed to determine storage path for {metadata}: {e}", exc_info=True)
             raise
@@ -224,20 +273,30 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
             partition_cols = None 
 
         # 4. Write data using the writer
+        # Determine timestamp_col and type from data or metadata
+        timestamp_col = getattr(metadata, 'timestamp_col', None) or 'timestamp'
+        timestamp_type = None
+        if hasattr(formatted_data, 'schema') and timestamp_col in formatted_data.schema.names:
+            timestamp_type = str(formatted_data.schema.field(timestamp_col).type)
+        if not timestamp_type:
+            timestamp_type = 'datetime64[ns, UTC]'
         try:
             logger.info(f"Writing data to {base_path} with partitions: {partition_cols}, writer: {type(self.writer).__name__}")
-            # Pass relevant kwargs, potentially filtering based on writer capabilities
-            await self.writer.write(
-                formatted_data,
+            await self.writer.save_data(
+                self.backend,
                 base_path,
+                formatted_data,
                 metadata,
-                partition_cols=partition_cols, # Pass determined partition columns
-                **kwargs # Pass through other options like mode='overwrite'
+                mode=kwargs.get('mode', 'append'),
+                partition_cols=partition_cols,
+                timestamp_col=timestamp_col,
+                timestamp_type=timestamp_type
             )
             logger.info(f"Successfully saved data to {base_path}")
         except Exception as e:
             logger.error(f"Failed to write data to {base_path}: {e}", exc_info=True)
-            raise # Re-raise the exception after logging
+            raise
+        return self
 
 class OHLCVStorageManager(StorageManager[OHLCVRecord]): # Specify the concrete type here
 

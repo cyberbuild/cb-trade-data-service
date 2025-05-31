@@ -19,7 +19,10 @@ from typing import Generator, AsyncGenerator # Import Generator and AsyncGenerat
 from storage.backends.local_file_backend import LocalFileBackend
 from storage.backends.azure_blob_backend import AzureBlobBackend
 from storage.backends.istorage_backend import IStorageBackend
-from storage.storage_manager import IStorageManager, IExchangeRecord, StorageManager, OHLCVStorageManager
+from storage.storage_manager import IStorageManager, IExchangeRecord, OHLCVStorageManager
+from storage.path_strategy import OHLCVPathStrategy
+from storage.partition_strategy import YearMonthDayPartitionStrategy
+from storage.readerwriter.delta import DeltaReaderWriter
 
 # Set SelectorEventLoopPolicy for Windows to fix aiodns/aiohttp/azure async issues
 if sys.platform == "win32":
@@ -134,26 +137,25 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixt
 @pytest.fixture(params=["local", "azure"], scope="function")
 async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerator[IStorageManager[IExchangeRecord], None]: # Correct type hint for async generator
     """Fixture providing a StorageManager configured with either local or azure backend."""
+    # Use OHLCVStorageManager with DeltaReaderWriter, OHLCVPathStrategy, and YearMonthDayPartitionStrategy
+    def make_strategy_kwargs(backend):
+        return {
+            'writer': DeltaReaderWriter(backend),
+            'path_strategy': OHLCVPathStrategy(),
+            'partition_strategy': YearMonthDayPartitionStrategy()
+        }
     if request.param == "local":
-        print("Configuring StorageManager with Local Backend")
-        # local_backend is synchronous, no await needed here
-        manager = StorageManager(backend=local_backend)
-        yield manager # Yield the manager instance
-        # Cleanup for local is handled by the local_backend fixture teardown
+        print("Configuring OHLCVStorageManager with Local Backend")
+        manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
+        yield manager
 
     elif request.param == "azure":
-        # Check if Azure connection string was available (skip handled in azure_backend fixture)
         connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
         if not connection_string:
-             pytest.skip("Skipping Azure test as connection string is not set.") # Redundant but safe
-
-        print("Configuring StorageManager with Azure Backend")
-        # azure_backend is an async generator, need to await it if it yielded something complex,
-        # but here it yields the backend instance directly after setup.
-        # We get the already setup backend instance from the fixture injection.
-        manager = StorageManager(backend=azure_backend)
-        yield manager # Yield the manager instance
-        # Cleanup for Azure is handled by the azure_backend fixture teardown
+            pytest.skip("Skipping Azure test as connection string is not set.")
+        print("Configuring OHLCVStorageManager with Azure Backend")
+        manager = OHLCVStorageManager(backend=azure_backend, **make_strategy_kwargs(azure_backend))
+        yield manager
 
     else:
         raise ValueError(f"Unknown backend type requested: {request.param}")

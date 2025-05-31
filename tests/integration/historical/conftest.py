@@ -75,6 +75,6 @@ async def setup_historical_data(storage_manager: IStorageManager):
         pytest.fail(f"Failed to set up historical data: {e}")
     finally:
         # Cleanup: Close the CCXT client
-        await ccxt_client.aclose()
+        await ccxt_client.close()
         logger.info("Setup: Closed CCXT client.")
         # Storage cleanup is handled by the storage_manager fixture itself

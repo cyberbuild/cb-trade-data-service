@@ -12,8 +12,7 @@ class IStorageBackend(abc.ABC):
     @abc.abstractmethod
     def get_uri_for_identifier(self, identifier: str) -> str:
         """Returns the full, protocol-specific URI for a given logical identifier."""
-        pass
-
+# filepath: c:\Project\cyberbuild\cb-trade\cb-trade-data-service\src\storage\backends\istorage_backend.py
     @abc.abstractmethod
     def get_storage_options(self) -> Optional[Dict[str, Any]]:
         """Returns a dictionary of options needed by libraries like fsspec, pyarrow, deltalake
@@ -34,11 +33,24 @@ class IStorageBackend(abc.ABC):
     async def list_items(self, prefix: str = "") -> List[str]:
         """Lists identifiers (files/directories) matching a given prefix."""
         pass
-
+    
+    @abc.abstractmethod
+    async def list_directories(self, prefix: str = "") -> List[str]:
+        """Lists only directories (not files) matching a given prefix."""
+        pass
+    
     @abc.abstractmethod
     async def exists(self, identifier: str) -> bool:
-        """Checks if an identifier exists."""
+        """Checks if the specified identifier exists."""
         pass
+    
+    def get_base_path(self, context: Dict[str, Any]) -> str:
+        """
+        Returns the base path for this storage backend.
+        For local storage, this is the root directory.
+        For cloud storage, this might be empty or a container name.
+        """
+        return ""
 
     @abc.abstractmethod
     async def delete(self, identifier: str):

@@ -164,19 +164,9 @@ class Metadata(dict):
     def interval(self):
         return self.get('interval')
 
-    @property
-    def exchange(self):
-        return self.get('exchange')
-
-    @property
-    def coin_symbol(self):
-        return self.get('coin')
-
-    @property
-    def interval(self):
-        return self.get('interval')
-
 class ExchangeData(Generic[TExchangeRecord]):
+    def __len__(self):
+        return len(self._data)
     def __init__(self, data: Union[List[TExchangeRecord], TExchangeRecord], metadata: Dict[str, Any]):
         if not data:
             raise ValueError(f"{self.__class__.__name__} cannot be initialized with empty data.")
