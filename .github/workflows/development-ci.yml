@@ -91,11 +91,11 @@ jobs:
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
           STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-          
-          STORAGE__TYPE: local
+            STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data
           CCXT_DEFAULT_EXCHANGE: cryptocom
-        run: |          echo "--- Debugging Environment Variables ---"
+        run: |
+          echo "--- Debugging Environment Variables ---"
           echo "Checking for STORAGE_AZURE_ACCOUNT_NAME..."
           if [ -n "$STORAGE_AZURE_ACCOUNT_NAME" ]; then
             echo "STORAGE_AZURE_ACCOUNT_NAME is SET (value: $STORAGE_AZURE_ACCOUNT_NAME)"
