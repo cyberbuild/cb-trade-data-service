@@ -49,7 +49,7 @@ jobs:
         shell: bash -l {0}
         run: |
           conda activate cb-trade
-          conda env create --name cb-trade --file environment.yml --prune
+          conda env create --name cb-trade --file environment.yml
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Example using Flake8 and Black. Adapt to your project's tools.
