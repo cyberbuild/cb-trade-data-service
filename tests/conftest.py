@@ -140,21 +140,27 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixt
         yield backend # Provide the backend instance to the test
 
     finally:
-        # Teardown: Delete the test container asynchronously only if we attempted creation
-        # This avoids trying to delete if setup failed early
-        # Although the unique name should prevent conflicts, cleanup is good practice
+        # Teardown: Delete the test container asynchronously with timeout protection
         try:
             print(f"Attempting to delete test container: {unique_container_name}")
-            # Add a small delay before attempting deletion (might help with eventual consistency)
-            await asyncio.sleep(2) # Wait 2 seconds
-            await blob_service_client.delete_container(unique_container_name)
+            # Add timeout protection for cleanup operations
+            async def cleanup_with_timeout():
+                await asyncio.sleep(1)  # Brief delay for consistency
+                await blob_service_client.delete_container(unique_container_name)
+                await blob_service_client.close()
+            
+            await asyncio.wait_for(cleanup_with_timeout(), timeout=30.0)
             print(f"Deleted test container: {unique_container_name}")
+        except asyncio.TimeoutError:
+            print(f"Warning: Timeout during cleanup of test container {unique_container_name}")
         except Exception as e:
-            # Catch specific exception (e.g., ResourceNotFoundError)
             print(f"Warning: Failed to delete test container {unique_container_name}: {e}")
         finally:
-            # Ensure the async client is closed
-            await blob_service_client.close()
+            # Force close the client if still open
+            try:
+                await blob_service_client.close()
+            except:
+                pass
 
 
 # --- Parameterized StorageManager Fixture ---
