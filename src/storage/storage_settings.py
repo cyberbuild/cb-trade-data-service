@@ -3,7 +3,15 @@ import os
 import logging
 from pydantic import Field, SecretStr, model_validator, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Literal, Union, Annotated, Any, Dict, List, Optional  # Add required types
+from typing import (
+    Literal,
+    Union,
+    Annotated,
+    Any,
+    Dict,
+    List,
+    Optional,
+)  # Add required types
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +47,7 @@ class AzureStorageSettings(BaseSettings):
     # Allow ignoring extra fields from environment for discriminated union
     model_config = SettingsConfigDict(extra="ignore")
     type: Literal["azure"] = "azure"
-    
+
     # Authentication options - either connection string OR managed identity
     connection_string: Optional[SecretStr] = Field(
         default=None, validation_alias="STORAGE_AZURE_CONNECTION_STRING"
@@ -50,14 +58,16 @@ class AzureStorageSettings(BaseSettings):
     use_managed_identity: bool = Field(
         default=False, validation_alias="STORAGE_AZURE_USE_MANAGED_IDENTITY"
     )
-    
+
     container_name: str = Field(
         default="rawdata", validation_alias="STORAGE_AZURE_CONTAINER_NAME"
     )
 
     def model_post_init(self, __context) -> None:
         """Validate that either connection_string or (account_name + use_managed_identity) is provided."""
-        if not self.connection_string and not (self.account_name and self.use_managed_identity):
+        if not self.connection_string and not (
+            self.account_name and self.use_managed_identity
+        ):
             raise ValueError(
                 "Either STORAGE_AZURE_CONNECTION_STRING or "
                 "(STORAGE_AZURE_ACCOUNT_NAME + STORAGE_AZURE_USE_MANAGED_IDENTITY=true) must be provided."

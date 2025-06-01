@@ -13,6 +13,7 @@ from .istorage_backend import IStorageBackend
 
 try:
     from azure.identity.aio import DefaultAzureCredential
+
     AZURE_IDENTITY_AVAILABLE = True
 except ImportError:
     AZURE_IDENTITY_AVAILABLE = False
@@ -23,11 +24,16 @@ logger = logging.getLogger(__name__)
 class AzureBlobBackend(IStorageBackend):
     """Implements IStorageBackend for Azure Blob Storage (compatible with ADLS Gen2)."""
 
-    def __init__(self, connection_string: Optional[str] = None, container_name: str = None, 
-                 account_name: Optional[str] = None, use_managed_identity: bool = False):
+    def __init__(
+        self,
+        connection_string: Optional[str] = None,
+        container_name: str = None,
+        account_name: Optional[str] = None,
+        use_managed_identity: bool = False,
+    ):
         """
         Initialize Azure Blob Backend with flexible authentication options.
-        
+
         Args:
             connection_string: Traditional connection string with account key
             container_name: Name of the storage container
@@ -36,7 +42,7 @@ class AzureBlobBackend(IStorageBackend):
         """
         if not container_name:
             raise ValueError("Azure container name is required.")
-            
+
         # Determine authentication method
         if use_managed_identity or (not connection_string and account_name):
             if not AZURE_IDENTITY_AVAILABLE:
@@ -45,16 +51,24 @@ class AzureBlobBackend(IStorageBackend):
                     "Install with: pip install azure-identity"
                 )
             if not account_name:
-                raise ValueError("account_name is required when using managed identity authentication.")
+                raise ValueError(
+                    "account_name is required when using managed identity authentication."
+                )
             self.auth_mode = "managed_identity"
             self.account_name = account_name
             self.connection_string = None
-            logger.info(f"Using managed identity authentication for storage account: {account_name}")
+            logger.info(
+                f"Using managed identity authentication for storage account: {account_name}"
+            )
         elif connection_string:
             self.auth_mode = "connection_string"
             self.connection_string = connection_string
-            self.account_name = self._extract_account_name_from_connection_string(connection_string)
-            logger.info(f"Using connection string authentication for storage account: {self.account_name}")
+            self.account_name = self._extract_account_name_from_connection_string(
+                connection_string
+            )
+            logger.info(
+                f"Using connection string authentication for storage account: {self.account_name}"
+            )
         else:
             raise ValueError(
                 "Either connection_string or (account_name + use_managed_identity=True) must be provided."
@@ -65,7 +79,9 @@ class AzureBlobBackend(IStorageBackend):
         self._container_client: Optional[ContainerClient] = None
         logger.info(f"Initialized AzureBlobBackend for container: {container_name}")
 
-    def _extract_account_name_from_connection_string(self, connection_string: str) -> str:
+    def _extract_account_name_from_connection_string(
+        self, connection_string: str
+    ) -> str:
         """Extract account name from connection string."""
         parts = {
             p.split("=", 1)[0].lower(): p.split("=", 1)[1]
@@ -86,21 +102,22 @@ class AzureBlobBackend(IStorageBackend):
                     credential = DefaultAzureCredential()
                     account_url = f"https://{self.account_name}.blob.core.windows.net"
                     self._service_client = BlobServiceClient(
-                        account_url=account_url,
-                        credential=credential
+                        account_url=account_url, credential=credential
                     )
-                    logger.info(f"Using managed identity for Azure authentication: {account_url}")
+                    logger.info(
+                        f"Using managed identity for Azure authentication: {account_url}"
+                    )
                 else:
                     # Use connection string
                     self._service_client = BlobServiceClient.from_connection_string(
                         self.connection_string
                     )
                     logger.info("Using connection string for Azure authentication")
-                
+
                 self._container_client = self._service_client.get_container_client(
                     self.container_name
                 )
-                
+
                 # Check if container exists, create if not
                 try:
                     await self._container_client.get_container_properties()  # Check existence
@@ -145,21 +162,21 @@ class AzureBlobBackend(IStorageBackend):
                 "account_name": self.account_name,
                 "azure_storage_account_name": self.account_name,
                 "storage_account": self.account_name,
-                "use_azure_cli": "true"  # Tell Delta Lake to use Azure CLI credentials
+                "use_azure_cli": "true",  # Tell Delta Lake to use Azure CLI credentials
             }
-            
+
             # If we have service principal credentials, include them
-            
+
             client_id = os.getenv("AZURE_CLIENT_ID")
-            tenant_id = os.getenv("AZURE_TENANT_ID") 
+            tenant_id = os.getenv("AZURE_TENANT_ID")
             client_secret = os.getenv("AZURE_CLIENT_SECRET")
-            
+
             if client_id and tenant_id:
                 options["azure_client_id"] = client_id
                 options["azure_tenant_id"] = tenant_id
                 if client_secret:
                     options["azure_client_secret"] = client_secret
-                    
+
         else:
             # Basic parsing for connection string
             parts = {
@@ -181,7 +198,9 @@ class AzureBlobBackend(IStorageBackend):
 
             if account_key:
                 options["account_key"] = account_key  # For fsspec/pyarrow
-                options["storage_access_key"] = account_key  # For deltalake-python < 0.9
+                options["storage_access_key"] = (
+                    account_key  # For deltalake-python < 0.9
+                )
                 options["azure_storage_access_key"] = (
                     account_key  # For deltalake-python >= 0.9
                 )
@@ -212,7 +231,7 @@ class AzureBlobBackend(IStorageBackend):
             logger.debug(
                 f"Generated storage options: { {k: '***' if 'key' in k or 'token' in k else v for k, v in options.items()} }"
             )
-        
+
         return options
 
     async def save_bytes(self, identifier: str, data: bytes):
