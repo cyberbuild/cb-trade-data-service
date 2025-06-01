@@ -17,6 +17,7 @@ permissions:
   contents: write # Needed for peter-evans/create-pull-request to push a branch and create a PR
   packages: write # Needed to publish packages to GitHub Packages
   pull-requests: write # Needed to create pull requests
+  id-token: write # Required for OIDC authentication with Azure
 
 jobs:
   build-test-publish-and-pr:
@@ -25,15 +26,22 @@ jobs:
     env: # Set environment variables for all steps in this job
       PYTHON DONTWRITEBYTECODE: '1' # Prevents Python from writing .pyc files
 
-    steps:
-      # 1. Checkout your repository code
+    steps:      # 1. Checkout your repository code
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           # Fetches all history for all branches and tags.
           fetch-depth: 0
 
-      # 2. Set up Conda environment
+      # 2. Azure Login using OIDC
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # 3. Set up Conda environment
       # This step should install all dependencies from environment.yml,
       # including conda packages and those listed under the 'pip:' section.
       # Ensure your environment.yml has 'name: cb-trade', 'python=3.9',
@@ -47,7 +55,7 @@ jobs:
           auto-activate-base: false # We want to activate the environment from the file
           use-mamba: true # Use Mamba for faster and potentially more robust dependency resolution
 
-      # 3. Install/Verify build tools (if not already in environment.yml)
+      # 4. Install/Verify build tools (if not already in environment.yml)
       # Best practice: include build, pytest, wheel in environment.yml dependencies (conda or pip section).
       # This step now primarily serves as a check or installs if truly missing.
       - name: Install package in editable mode and ensure tools
@@ -62,7 +70,7 @@ jobs:
           echo "Upgrading pydantic-settings..."
           python -m pip install --upgrade pydantic-settings
 
-      # 4. (Optional but Recommended) Lint and Format Check
+      # 5. (Optional but Recommended) Lint and Format Check
       # Flake8 and Black should be installed from environment.yml's pip section by Step 2.
       # Flake8 will use the .flake8 configuration file in the project root.
       - name: Lint and Format Check
@@ -73,34 +81,47 @@ jobs:
           flake8 . --exclude tests # Exclude the tests folder from flake8
           black --check . --exclude tests # Optionally exclude tests from black as well
 
-      # 5. Debug Environment Variables for Tests
+      # 6. Debug Environment Variables for Tests
       # This step helps verify if secrets and env vars are being set as expected.
       # It DOES NOT print the actual values of secrets for security.
       - name: Debug Environment Variables for Tests
         # Ensures conda environment is activated for this step by using a login shell
-        shell: bash -l {0}
-        env: # Pass the same env vars as the test step to check them
-          STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
-          STORAGE__AZURE__CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-          CCXT_CRYPTO_COM_API_KEY: ${{ secrets.CCXT_CRYPTO_COM_API_KEY }}
-          CCXT_CRYPTO_COM_SECRET: ${{ secrets.CCXT_CRYPTO_COM_SECRET }}
+        shell: bash -l {0}        env: # Pass the same env vars as the test step to check them
+          # Azure authentication for managed identity (GitHub OIDC)
+          STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
+          STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
+          STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          
           STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data
           CCXT_DEFAULT_EXCHANGE: cryptocom
-        run: |
-          echo "--- Debugging Environment Variables ---"
-          echo "Checking for STORAGE_AZURE_CONNECTION_STRING..."
+        run: |          echo "--- Debugging Environment Variables ---"
+          echo "Checking for STORAGE_AZURE_ACCOUNT_NAME..."
+          if [ -n "$STORAGE_AZURE_ACCOUNT_NAME" ]; then
+            echo "STORAGE_AZURE_ACCOUNT_NAME is SET (value: $STORAGE_AZURE_ACCOUNT_NAME)"
+          else
+            echo "STORAGE_AZURE_ACCOUNT_NAME is NOT SET"
+          fi
+
+          echo "Checking for STORAGE_AZURE_USE_MANAGED_IDENTITY..."
+          if [ -n "$STORAGE_AZURE_USE_MANAGED_IDENTITY" ]; then
+            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is SET (value: $STORAGE_AZURE_USE_MANAGED_IDENTITY)"
+          else
+            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is NOT SET"
+          fi
+
+          echo "Checking for STORAGE_AZURE_CONNECTION_STRING (fallback)..."
           if [ -n "$STORAGE_AZURE_CONNECTION_STRING" ]; then
             echo "STORAGE_AZURE_CONNECTION_STRING is SET (length: ${#STORAGE_AZURE_CONNECTION_STRING})"
           else
             echo "STORAGE_AZURE_CONNECTION_STRING is NOT SET"
           fi
 
-          echo "Checking for STORAGE__AZURE__CONTAINER_NAME..."
-          if [ -n "$STORAGE__AZURE__CONTAINER_NAME" ]; then
-            echo "STORAGE__AZURE__CONTAINER_NAME is SET (value: $STORAGE__AZURE__CONTAINER_NAME)"
+          echo "Checking for STORAGE_AZURE_CONTAINER_NAME..."
+          if [ -n "$STORAGE_AZURE_CONTAINER_NAME" ]; then
+            echo "STORAGE_AZURE_CONTAINER_NAME is SET (value: $STORAGE_AZURE_CONTAINER_NAME)"
           else
-            echo "STORAGE__AZURE__CONTAINER_NAME is NOT SET"
+            echo "STORAGE_AZURE_CONTAINER_NAME is NOT SET"
           fi
 
           echo "Checking for CCXT_CRYPTO_COM_API_KEY..."
@@ -122,18 +143,21 @@ jobs:
           echo "CCXT_DEFAULT_EXCHANGE is: $CCXT_DEFAULT_EXCHANGE"
           echo "--- End Debugging Environment Variables ---"
 
-      # 6. Run tests
+      # 7. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.
       # --tb=long ensures full tracebacks are shown for all failures.
       - name: Run tests with Pytest
         # Ensures conda environment is activated for this step by using a login shell
-        shell: bash -l {0}
-        env:
-          # Secrets (ensure these are created in GitHub Repository Settings > Secrets and variables > Actions)
-          STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
+        shell: bash -l {0}        env:
+          # Azure authentication for managed identity (GitHub OIDC)
+          STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
+          STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          
+          # Fallback to connection string if needed (for transition period)
+          STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
           
           # Non-sensitive configurations from your .env.test file
           STORAGE__TYPE: local
@@ -141,7 +165,7 @@ jobs:
           CCXT_DEFAULT_EXCHANGE: cryptocom
         run: pytest --tb=long
 
-      # 7. Build package
+      # 8. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
       - name: Build package
         # Ensures conda environment is activated for this step by using a login shell

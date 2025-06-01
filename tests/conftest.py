@@ -97,21 +97,32 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
 
 @pytest.fixture(scope="function")
 async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixture
-    """Fixture for AzureBlobBackend using settings from .env.test, manages container lifecycle with unique names."""
-    connection_string = os.environ.get("STORAGE_AZURE_CONNECTION_STRING")
+    """Fixture for AzureBlobBackend using service principal authentication."""
+    account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME")
+    use_managed_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "false").lower() == "true"
     base_container_name = os.environ.get("STORAGE_AZURE_CONTAINER_NAME", "test-container-fallback")
 
-    if not connection_string:
-        pytest.skip("STORAGE_AZURE_CONNECTION_STRING environment variable not set.")
+    # Validate service principal authentication configuration
+    if not (account_name and use_managed_identity):
+        pytest.skip("Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")
 
     # Generate a unique container name for this specific test function execution
     unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
 
-    print(f"Using unique Azure test container: {unique_container_name}")
-    backend = AzureBlobBackend(connection_string=connection_string, container_name=unique_container_name)
-
-    # Use async BlobServiceClient for container management
-    blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+    print(f"Using service principal authentication with unique Azure test container: {unique_container_name}")
+    
+    # Create backend with service principal authentication
+    backend = AzureBlobBackend(
+        account_name=account_name, 
+        container_name=unique_container_name, 
+        use_managed_identity=True
+    )
+    
+    # Use DefaultAzureCredential for service principal authentication
+    from azure.identity import DefaultAzureCredential
+    credential = DefaultAzureCredential()
+    account_url = f"https://{account_name}.blob.core.windows.net"
+    blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
     container_created = False
     try:
         # Create container asynchronously
@@ -164,10 +175,14 @@ async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerat
         yield manager
 
     elif request.param == "azure":
-        connection_string = os.environ.get("STORAGE_AZURE_CONNECTION_STRING")
-        if not connection_string:
-            pytest.skip("Skipping Azure test as connection string is not set.")
-        print("Configuring OHLCVStorageManager with Azure Backend")
+        # Check for service principal authentication configuration
+        account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME")
+        use_managed_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "false").lower() == "true"
+        
+        if not (account_name and use_managed_identity):
+            pytest.skip("Skipping Azure test: Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")
+        
+        print("Configuring OHLCVStorageManager with Azure Backend (Service Principal)")
         manager = OHLCVStorageManager(backend=azure_backend, **make_strategy_kwargs(azure_backend))
         yield manager
 
@@ -211,15 +226,14 @@ def check_no_data_dirs_after_tests():
 
 logger = logging.getLogger(__name__)
 
-@pytest.fixture(params=["local", "azure"], scope="function")
+
+@pytest.fixture(scope="session")
 async def setup_historical_data(request, local_backend, azure_backend) -> AsyncGenerator[dict, None]:
     """
     Fetches recent historical data using CCXT and saves it using the storage_manager.
     This fixture runs before tests that require pre-populated data.
     It fetches 1 hour of 1m BTC/USD data from cryptocom.
-    """
-
-    
+    """    
     # Create storage manager based on the parameter
     def make_strategy_kwargs(backend):
         return {
@@ -231,9 +245,13 @@ async def setup_historical_data(request, local_backend, azure_backend) -> AsyncG
     if request.param == "local":
         storage_manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
     elif request.param == "azure":
-        connection_string = os.environ.get("STORAGE_AZURE_CONNECTION_STRING")
-        if not connection_string:
-            pytest.skip("Skipping Azure test as connection string is not set.")
+        # Check for service principal authentication configuration
+        account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME")
+        use_managed_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "false").lower() == "true"
+        
+        if not (account_name and use_managed_identity):
+            pytest.skip("Skipping Azure test: Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")
+        
         storage_manager = OHLCVStorageManager(backend=azure_backend, **make_strategy_kwargs(azure_backend))
     else:
         raise ValueError(f"Unknown backend type requested: {request.param}")

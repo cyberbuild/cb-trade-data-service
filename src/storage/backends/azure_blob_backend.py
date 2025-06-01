@@ -1,5 +1,6 @@
 # filepath: c:\Project\cyberbuild\cb-trade\cb-trade-data-service\src\storage\backends\azure_blob_backend.py
 import logging
+import os
 from typing import List, Dict, Optional
 from azure.storage.blob.aio import (
     BlobServiceClient,
@@ -10,36 +11,96 @@ from azure.core.exceptions import ResourceNotFoundError
 from pathlib import Path
 from .istorage_backend import IStorageBackend
 
+try:
+    from azure.identity.aio import DefaultAzureCredential
+    AZURE_IDENTITY_AVAILABLE = True
+except ImportError:
+    AZURE_IDENTITY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
 class AzureBlobBackend(IStorageBackend):
     """Implements IStorageBackend for Azure Blob Storage (compatible with ADLS Gen2)."""
 
-    """Implements IStorageBackend for Azure Blob Storage (compatible with ADLS Gen2)."""
-
-    def __init__(self, connection_string: str, container_name: str):
-        if not connection_string:
-            raise ValueError("Azure connection string is required.")
+    def __init__(self, connection_string: Optional[str] = None, container_name: str = None, 
+                 account_name: Optional[str] = None, use_managed_identity: bool = False):
+        """
+        Initialize Azure Blob Backend with flexible authentication options.
+        
+        Args:
+            connection_string: Traditional connection string with account key
+            container_name: Name of the storage container
+            account_name: Storage account name (required for managed identity)
+            use_managed_identity: Use Azure Identity for authentication instead of connection string
+        """
         if not container_name:
             raise ValueError("Azure container name is required.")
+            
+        # Determine authentication method
+        if use_managed_identity or (not connection_string and account_name):
+            if not AZURE_IDENTITY_AVAILABLE:
+                raise ValueError(
+                    "azure-identity package is required for managed identity authentication. "
+                    "Install with: pip install azure-identity"
+                )
+            if not account_name:
+                raise ValueError("account_name is required when using managed identity authentication.")
+            self.auth_mode = "managed_identity"
+            self.account_name = account_name
+            self.connection_string = None
+            logger.info(f"Using managed identity authentication for storage account: {account_name}")
+        elif connection_string:
+            self.auth_mode = "connection_string"
+            self.connection_string = connection_string
+            self.account_name = self._extract_account_name_from_connection_string(connection_string)
+            logger.info(f"Using connection string authentication for storage account: {self.account_name}")
+        else:
+            raise ValueError(
+                "Either connection_string or (account_name + use_managed_identity=True) must be provided."
+            )
 
-        self.connection_string = connection_string
         self.container_name = container_name
         self._service_client: Optional[BlobServiceClient] = None
         self._container_client: Optional[ContainerClient] = None
         logger.info(f"Initialized AzureBlobBackend for container: {container_name}")
 
+    def _extract_account_name_from_connection_string(self, connection_string: str) -> str:
+        """Extract account name from connection string."""
+        parts = {
+            p.split("=", 1)[0].lower(): p.split("=", 1)[1]
+            for p in connection_string.split(";")
+            if "=" in p
+        }
+        account_name = parts.get("accountname")
+        if not account_name:
+            raise ValueError("Could not extract AccountName from connection string.")
+        return account_name
+
     async def _get_container_client(self) -> ContainerClient:
         """Initializes and returns the ContainerClient, creating container if needed."""
         if self._container_client is None:
             try:
-                self._service_client = BlobServiceClient.from_connection_string(
-                    self.connection_string
-                )
+                if self.auth_mode == "managed_identity":
+                    # Use DefaultAzureCredential for authentication
+                    credential = DefaultAzureCredential()
+                    account_url = f"https://{self.account_name}.blob.core.windows.net"
+                    self._service_client = BlobServiceClient(
+                        account_url=account_url,
+                        credential=credential
+                    )
+                    logger.info(f"Using managed identity for Azure authentication: {account_url}")
+                else:
+                    # Use connection string
+                    self._service_client = BlobServiceClient.from_connection_string(
+                        self.connection_string
+                    )
+                    logger.info("Using connection string for Azure authentication")
+                
                 self._container_client = self._service_client.get_container_client(
                     self.container_name
                 )
+                
                 # Check if container exists, create if not
                 try:
                     await self._container_client.get_container_properties()  # Check existence
@@ -71,7 +132,6 @@ class AzureBlobBackend(IStorageBackend):
         """Returns an az:// URI for the identifier (suitable for Delta Lake on Azure Blob)."""
         # Construct the az:// URI format expected by deltalake-python
         # az://<container_name>/<path>
-        # The storage options will handle authentication.
         return f"az://{self.container_name}/{identifier}"
 
     async def get_storage_options(self) -> Dict[str, str]:
@@ -79,57 +139,80 @@ class AzureBlobBackend(IStorageBackend):
         Requires parsing the connection string, which can be complex.
         Alternatively, pass individual components (account_name, key/sas) during init.
         """
-        # Basic parsing, might not cover all auth methods (SAS, Identity)
-        parts = {
-            p.split("=", 1)[0].lower(): p.split("=", 1)[1]
-            for p in self.connection_string.split(";")
-            if "=" in p
-        }
-        options = {}
-        account_name = parts.get("accountname")
-        account_key = parts.get("accountkey")
-        sas_token = parts.get("sharedaccesssignature")
+        # For managed identity, provide account name and authentication method
+        if self.auth_mode == "managed_identity":
+            options = {
+                "account_name": self.account_name,
+                "azure_storage_account_name": self.account_name,
+                "storage_account": self.account_name,
+                "use_azure_cli": "true"  # Tell Delta Lake to use Azure CLI credentials
+            }
+            
+            # If we have service principal credentials, include them
+            
+            client_id = os.getenv("AZURE_CLIENT_ID")
+            tenant_id = os.getenv("AZURE_TENANT_ID") 
+            client_secret = os.getenv("AZURE_CLIENT_SECRET")
+            
+            if client_id and tenant_id:
+                options["azure_client_id"] = client_id
+                options["azure_tenant_id"] = tenant_id
+                if client_secret:
+                    options["azure_client_secret"] = client_secret
+                    
+        else:
+            # Basic parsing for connection string
+            parts = {
+                p.split("=", 1)[0].lower(): p.split("=", 1)[1]
+                for p in self.connection_string.split(";")
+                if "=" in p
+            }
+            options = {}
+            account_name = parts.get("accountname")
+            account_key = parts.get("accountkey")
+            sas_token = parts.get("sharedaccesssignature")
 
-        if account_name:
-            options["account_name"] = account_name  # For fsspec/pyarrow
-            options["storage_account"] = account_name  # Common alternative name
-            options["azure_storage_account_name"] = (
-                account_name  # Explicitly for deltalake-python
+            if account_name:
+                options["account_name"] = account_name  # For fsspec/pyarrow
+                options["storage_account"] = account_name  # Common alternative name
+                options["azure_storage_account_name"] = (
+                    account_name  # Explicitly for deltalake-python
+                )
+
+            if account_key:
+                options["account_key"] = account_key  # For fsspec/pyarrow
+                options["storage_access_key"] = account_key  # For deltalake-python < 0.9
+                options["azure_storage_access_key"] = (
+                    account_key  # For deltalake-python >= 0.9
+                )
+            elif sas_token:
+                options["sas_token"] = sas_token
+                options["azure_storage_sas_token"] = sas_token  # For deltalake-python
+            # else: Assume managed identity or other ambient auth
+
+            # Add endpoint if specified (e.g., for Azurite or regional endpoints)
+            endpoint = parts.get("blobendpoint")
+            if endpoint:
+                options["endpoint_url"] = endpoint
+                options["azure_storage_endpoint_url"] = endpoint  # For deltalake-python
+
+            # For Delta Lake specifically, it often uses 'AZURE_STORAGE_ACCOUNT_NAME', 'AZURE_STORAGE_ACCESS_KEY', etc.
+            # or connection string directly via 'AZURE_STORAGE_CONNECTION_STRING' env var.
+            # Providing options dict is mainly for pyarrow/fsspec integration.
+            # Delta Lake Rust core might pick up env vars automatically.
+            # Let's ensure keys used by deltalake-python are present if possible.
+            if not options:
+                logger.warning(
+                    "Could not parse account details from connection string for storage_options. Relying on ambient auth or env vars."
+                )
+                return {
+                    "anon": True
+                }  # Indicate anonymous access might be attempted by pyarrow/fsspec
+
+            logger.debug(
+                f"Generated storage options: { {k: '***' if 'key' in k or 'token' in k else v for k, v in options.items()} }"
             )
-
-        if account_key:
-            options["account_key"] = account_key  # For fsspec/pyarrow
-            options["storage_access_key"] = account_key  # For deltalake-python < 0.9
-            options["azure_storage_access_key"] = (
-                account_key  # For deltalake-python >= 0.9
-            )
-        elif sas_token:
-            options["sas_token"] = sas_token
-            options["azure_storage_sas_token"] = sas_token  # For deltalake-python
-        # else: Assume managed identity or other ambient auth
-
-        # Add endpoint if specified (e.g., for Azurite or regional endpoints)
-        endpoint = parts.get("blobendpoint")
-        if endpoint:
-            options["endpoint_url"] = endpoint
-            options["azure_storage_endpoint_url"] = endpoint  # For deltalake-python
-
-        # For Delta Lake specifically, it often uses 'AZURE_STORAGE_ACCOUNT_NAME', 'AZURE_STORAGE_ACCESS_KEY', etc.
-        # or connection string directly via 'AZURE_STORAGE_CONNECTION_STRING' env var.
-        # Providing options dict is mainly for pyarrow/fsspec integration.
-        # Delta Lake Rust core might pick up env vars automatically.
-        # Let's ensure keys used by deltalake-python are present if possible.
-        if not options:
-            logger.warning(
-                "Could not parse account details from connection string for storage_options. Relying on ambient auth or env vars."
-            )
-            return {
-                "anon": True
-            }  # Indicate anonymous access might be attempted by pyarrow/fsspec
-
-        logger.debug(
-            f"Generated storage options: { {k: '***' if 'key' in k or 'token' in k else v for k, v in options.items()} }"
-        )
+        
         return options
 
     async def save_bytes(self, identifier: str, data: bytes):

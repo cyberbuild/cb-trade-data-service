@@ -49,6 +49,18 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def get_storage_backend():
+    """
+    Create and return the appropriate storage backend based on current settings.
+    
+    Returns:
+        Configured storage backend instance
+    """
+    from storage.backend_factory import create_storage_backend
+    settings = get_settings()
+    return create_storage_backend(settings.storage)
+
+
 # Example of accessing specific config based on type after loading
 # try:
 #     storage_settings = get_settings().storage
