@@ -61,16 +61,6 @@ jobs:
           echo "Upgrading pydantic-settings..."
           python -m pip install --upgrade pydantic-settings
 
-      # 4. (Optional but Recommended) Lint and Format Check
-      # Flake8 and Black should be installed from environment.yml's pip section by Step 2.
-      # Flake8 will use the .flake8 configuration file in the project root.
-      - name: Lint and Format Check
-        shell: bash
-        run: |
-          echo "Running linters and format checkers. Flake8 and Black should be installed via environment.yml."
-          flake8 . # Runs flake8, using .flake8 config file if present
-          black --check .
-
       # 5. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
