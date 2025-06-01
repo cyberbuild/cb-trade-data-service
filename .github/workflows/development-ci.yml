@@ -34,7 +34,8 @@ jobs:
           fetch-depth: 0
 
       # 2. Set up Conda environment
-      # Ensure your environment.yml has 'name: cb-trade' and 'python=3.9'.
+      # Ensure your environment.yml has 'name: cb-trade', 'python=3.9',
+      # and includes 'flake8' and 'black' (e.g., under the pip section).
       - name: Set up Conda environment
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -42,6 +43,7 @@ jobs:
           environment-file: environment.yml # Path to your conda environment file
           python-version: '3.9' # Align with python=3.9 in environment.yml
           auto-activate-base: false # We want to activate the environment from the file
+          use-mamba: true # Use Mamba for faster and potentially more robust dependency resolution
 
       # 3. Install build tools (if not already in environment.yml)
       # Best practice: include pip, build, pytest, wheel in environment.yml dependencies.
@@ -56,12 +58,12 @@ jobs:
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Example using Flake8 and Black. Adapt to your project's tools.
-      # Ensure these are run within the conda environment.
+      # These tools should be installed via your environment.yml file.
       - name: Lint and Format Check
         # Ensures conda environment is activated
         shell: bash
         run: |
-          # Ensure linters are installed in the conda env (e.g., via environment.yml)
+          echo "Running linters and format checkers. Ensure flake8 and black are in environment.yml."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           black --check .
 
