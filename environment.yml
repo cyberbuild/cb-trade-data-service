@@ -8,8 +8,9 @@ dependencies:
   - pandas
   - numpy
   - pydantic
-  - pydantic-settings
+  - pydantic-settings  
   - azure-storage-blob
+  - azure-core
   - fastapi
   - uvicorn
   - websockets
@@ -21,6 +22,7 @@ dependencies:
   - aiofiles
   - python-dotenv
   - pyarrow
+  - deltalake
   - pip:
     - ccxt  # Install ccxt using pip
     - flake8 # Added linter
