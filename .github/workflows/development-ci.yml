@@ -1,0 +1,118 @@
+name: Development CI & PR to Master
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push events but only for the development branch
+  push:
+    branches:
+      - development
+  # Triggers the workflow on pull request events targeting the development branch
+  pull_request:
+    branches:
+      - development
+
+# Set default permissions for the GITHUB_TOKEN
+# These permissions are necessary for the actions used in this workflow.
+permissions:
+  contents: write # Needed for peter-evans/create-pull-request to push a branch and create a PR
+  packages: write # Needed to publish packages to GitHub Packages
+  pull-requests: write # Needed to create pull requests
+
+jobs:
+  build-test-publish-and-pr:
+    name: Build, Test, Publish & Create PR
+    runs-on: ubuntu-latest # Specifies the type of runner the job will run on
+    # This job will run on pushes to 'development' or on PRs targeting 'development'.
+    # Specific steps for publishing and creating PRs will have additional conditions.
+
+    steps:
+      # 1. Checkout your repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetches all history for all branches and tags.
+          # Important for 'create-pull-request' action to correctly determine changes
+          # if you are creating PR from 'development' to 'master'.
+          fetch-depth: 0
+
+      # 2. Set up Conda environment
+      # This step replaces the direct setup-python and pip install for dependencies
+      - name: Set up Conda environment
+        uses: conda-incubator/setup-miniconda@v3 # Use a dedicated action to set up Conda
+        with:
+          activate-environment: build # Name of the conda environment to create/activate
+          environment-file: environment.yml # Path to your conda environment file
+          python-version: '3.11' # Optional: Specify Python version if not strictly defined in environment.yml
+          auto-activate-base: false # We want to activate our specific environment
+
+      # 3. Install build tools (if not already in environment.yml)
+      # These tools are needed for subsequent steps.
+      # Ensure they are installed in the activated conda environment.
+      - name: Install build and test tools
+        shell: bash -l {0} # Ensures conda environment is activated for this step
+        run: |
+          conda install --name build --yes pip build pytest wheel # Or add these to your environment.yml
+          # If your environment.yml already includes pip, build, pytest, wheel, you might not need this explicit install.
+          # Verify they are installed in the 'build' environment.
+
+      # 4. (Optional but Recommended) Lint and Format Check
+      # Example using Flake8 and Black. Adapt to your project's tools.
+      # Ensure these are run within the conda environment.
+      - name: Lint and Format Check
+        shell: bash -l {0} # Ensures conda environment is activated
+        run: |
+          # Ensure linters are installed in the conda env, either via environment.yml or here
+          # conda install --name build --yes flake8 black
+          # Or if already installed via environment.yml:
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          black --check .
+        # continue-on-error: true
+
+      # 5. Run tests
+      # Assumes tests are run with pytest, using the conda environment's Python.
+      - name: Run tests with Pytest
+        shell: bash -l {0} # Ensures conda environment is activated
+        run: pytest
+
+      # 6. Build package
+      # This step uses the 'build' package, which requires a pyproject.toml.
+      # It should use the Python from the activated conda environment.
+      - name: Build package
+        shell: bash -l {0} # Ensures conda environment is activated
+        run: python -m build
+
+      # 7. Publish to GitHub Packages (only on direct push to development)
+      # This step runs only when the event is a push to the 'development' branch,
+      # indicating a merge has occurred.
+      - name: Publish package to GitHub Packages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.GITHUB_TOKEN }}
+          repository_url: https://pypi.pkg.github.com/cyberbuild/ # IMPORTANT: Replace with your GitHub username or organization
+          # Make sure your setup.py or pyproject.toml generates a unique version for each publish.
+
+      # 8. Create Pull Request from development to master (only on direct push to development)
+      # This step also runs only when the event is a push to the 'development' branch,
+      # and implies all previous steps were successful.
+      - name: Create Pull Request to master
+        if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # Uses the default GITHUB_TOKEN
+          commit-message: "Auto-PR: Merge development into master after successful CI"
+          branch: auto-pr/development-to-master
+          base: master # The branch to target with the PR
+          head: development # The branch to merge from (the current state of development)
+          title: 'Auto-PR: Merge `development` into `master`'
+          body: |
+            Automated Pull Request
+            - This PR was automatically created after a successful build, test, and package publish on the `development` branch.
+            - Please review the changes before merging.
+
+            Triggered by commit: ${{ github.sha }}
+          labels: automated pr, development-merge
+          # assignees: your-github-username # Optional: assign someone to review
+          # reviewers: your-github-username,another-reviewer # Optional: request reviews
+          # draft: false # Set to true to create a draft PR
