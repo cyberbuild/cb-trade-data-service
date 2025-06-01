@@ -16,7 +16,7 @@ class HistoricalFetcher:
         end_time: datetime,
         limit: Optional[int] = None,
         offset: int = 0,
-        **kwargs
+        **kwargs,
     ) -> ExchangeData:
         """
         Fetch historical data for given metadata from storage within a time range.
@@ -28,7 +28,8 @@ class HistoricalFetcher:
             metadata=metadata,
             start_date=start_time,
             end_date=end_time,
-            columns=kwargs.get('columns'))
+            columns=kwargs.get("columns"),
+        )
         # Return with metadata (or return None if no data found)
         if result_data is None:
             return ExchangeData(data=[], metadata=dict(metadata))
@@ -42,12 +43,16 @@ class HistoricalFetcher:
 
         # Calculate end index for slicing
         start_idx = offset
-        end_idx = min(offset + limit, total_records) if limit is not None else total_records
+        end_idx = (
+            min(offset + limit, total_records) if limit is not None else total_records
+        )
 
         # Slice the data
         paginated_data = result_data.data[start_idx:end_idx]
         # Create new ExchangeData with paginated data
-        paginated_result = ExchangeData(data=paginated_data, metadata=result_data.metadata)
+        paginated_result = ExchangeData(
+            data=paginated_data, metadata=result_data.metadata
+        )
 
         return paginated_result
 
@@ -64,9 +69,7 @@ class HistoricalFetcher:
         try:
             # Fetch data for the range using the correct parameter names
             exchange_data = await self._storage_manager.get_range(
-                metadata=metadata,
-                start_date=start_time,
-                end_date=end_time
+                metadata=metadata, start_date=start_time, end_date=end_time
             )
 
             if exchange_data is None or not exchange_data.data:

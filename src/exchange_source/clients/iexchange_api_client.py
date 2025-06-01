@@ -11,11 +11,9 @@ class IExchangeAPIClient(ABC):
         pass
 
     @abstractmethod
-    async def fetch_ohlcv_data(self,
-                               coin_symbol: str,
-                               start_time: Any,
-                               end_time: Any,
-                               interval: str = '5m') -> 'ExchangeData[IExchangeRecord]': # Use forward reference
+    async def fetch_ohlcv_data(
+        self, coin_symbol: str, start_time: Any, end_time: Any, interval: str = "5m"
+    ) -> "ExchangeData[IExchangeRecord]":  # Use forward reference
         pass
 
     @abstractmethod

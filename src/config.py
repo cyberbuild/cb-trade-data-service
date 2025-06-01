@@ -6,6 +6,7 @@ from pydantic import Field
 
 # Import the new storage config structure
 from storage.storage_settings import StorageConfig
+
 # Import the new exchange config structure
 from exchange_source.config import CCXTConfig
 
@@ -16,7 +17,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(sys.stdout)
         # Add FileHandler etc. based on config
-    ]
+    ],
 )
 
 
@@ -35,9 +36,9 @@ class Settings(BaseSettings):
     # Pydantic-settings automatically loads .env files by default
     # Configure loading behavior
     model_config = SettingsConfigDict(
-        env_file='.env',  # Load .env file
-        extra='ignore',  # Ignore extra fields not defined in the models
-        env_nested_delimiter='__'  # Use double underscore for nested env vars
+        env_file=".env",  # Load .env file
+        extra="ignore",  # Ignore extra fields not defined in the models
+        env_nested_delimiter="__",  # Use double underscore for nested env vars
     )
 
 
@@ -46,6 +47,7 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     # Instantiate settings here, ensuring .env is loaded
     return Settings()
+
 
 # Example of accessing specific config based on type after loading
 # try:

@@ -1,6 +1,6 @@
 from typing import List, Optional
 from abc import ABC, abstractmethod
-\
+
 from exchange_source.models import Metadata
 
 
@@ -8,6 +8,7 @@ class IPartitionStrategy(ABC):
     """
     Abstract base class for defining partitioning strategies for data storage.
     """
+
     @abstractmethod
     def get_partition_cols(self, metadata: Metadata) -> Optional[List[str]]:
         """

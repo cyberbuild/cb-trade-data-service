@@ -11,16 +11,17 @@ class Paging:
         limit: Maximum number of records to return (None means no limit)
         offset: Number of records to skip from the beginning (default: 0)
     """
+
     limit: Optional[int] = None
     offset: int = 0
 
     @classmethod
-    def all_records(cls) -> 'Paging':
+    def all_records(cls) -> "Paging":
         """Returns a Paging object that retrieves all records (no pagination)."""
         return cls(limit=None, offset=0)
 
     @classmethod
-    def create(cls, limit: Optional[int] = None, offset: int = 0) -> 'Paging':
+    def create(cls, limit: Optional[int] = None, offset: int = 0) -> "Paging":
         """Creates a Paging object with specified parameters."""
         return cls(limit=limit, offset=offset)
 

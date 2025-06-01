@@ -24,8 +24,8 @@ class LocalFileBackend(IStorageBackend):
         full_path = (self.root_path / identifier).resolve()
         # Security check: Ensure the path is still within the root directory
         if self.root_path not in full_path.parents and full_path != self.root_path:
-             common = os.path.commonpath([str(self.root_path), str(full_path)])
-             if common != str(self.root_path):
+            common = os.path.commonpath([str(self.root_path), str(full_path)])
+            if common != str(self.root_path):
                 raise ValueError(f"Path traversal attempt detected: {identifier}")
         return full_path
 
@@ -33,9 +33,11 @@ class LocalFileBackend(IStorageBackend):
         """Returns a file:// URI for the identifier."""
         return self._get_full_path(identifier).as_uri()
 
-    async def get_storage_options(self) -> Dict[str, Any]: # Changed to async and return Dict
+    async def get_storage_options(
+        self,
+    ) -> Dict[str, Any]:  # Changed to async and return Dict
         """Local files generally don't require special storage options for libraries."""
-        return {} # Return empty dict
+        return {}  # Return empty dict
 
     async def save_bytes(self, identifier: str, data: bytes):
         """Saves bytes to a local file asynchronously."""
@@ -43,7 +45,7 @@ class LocalFileBackend(IStorageBackend):
         try:
             # Ensure parent directory exists
             await aiofiles.os.makedirs(full_path.parent, exist_ok=True)
-            async with aiofiles.open(full_path, mode='wb') as f:
+            async with aiofiles.open(full_path, mode="wb") as f:
                 await f.write(data)
             logger.debug(f"Saved {len(data)} bytes to {full_path}")
         except Exception as e:
@@ -54,13 +56,13 @@ class LocalFileBackend(IStorageBackend):
         """Loads bytes from a local file asynchronously."""
         full_path = self._get_full_path(identifier)
         try:
-            async with aiofiles.open(full_path, mode='rb') as f:
+            async with aiofiles.open(full_path, mode="rb") as f:
                 data = await f.read()
             logger.debug(f"Loaded {len(data)} bytes from {full_path}")
             return data
         except FileNotFoundError:
             logger.warning(f"File not found: {full_path}")
-            raise # Re-raise FileNotFoundError
+            raise  # Re-raise FileNotFoundError
         except Exception as e:
             logger.error(f"Error loading bytes from {full_path}: {e}")
             raise
@@ -86,14 +88,18 @@ class LocalFileBackend(IStorageBackend):
                     items.append(relative_path)
             # If prefix points to a file, list_items should arguably return that item
             elif await aiofiles.os.path.exists(search_path):
-                 items.append(Path(search_path).relative_to(self.root_path).as_posix())
+                items.append(Path(search_path).relative_to(self.root_path).as_posix())
 
-            logger.debug(f"Listed {len(items)} items under prefix '{prefix}' in {search_path}")
+            logger.debug(
+                f"Listed {len(items)} items under prefix '{prefix}' in {search_path}"
+            )
         except FileNotFoundError:
-             logger.warning(f"Prefix directory not found for listing: {search_path}")
-             return [] # Return empty list if prefix doesn't exist
+            logger.warning(f"Prefix directory not found for listing: {search_path}")
+            return []  # Return empty list if prefix doesn't exist
         except Exception as e:
-            logger.error(f"Error listing items under prefix '{prefix}' in {search_path}: {e}")
+            logger.error(
+                f"Error listing items under prefix '{prefix}' in {search_path}: {e}"
+            )
             raise
         return items
 
@@ -108,15 +114,23 @@ class LocalFileBackend(IStorageBackend):
                     entry_path = search_path / entry_name
                     # Only include directories
                     if await aiofiles.os.path.isdir(entry_path):
-                        relative_path = entry_path.relative_to(self.root_path).as_posix()
+                        relative_path = entry_path.relative_to(
+                            self.root_path
+                        ).as_posix()
                         directories.append(relative_path)
 
-            logger.debug(f"Listed {len(directories)} directories under prefix '{prefix}' in {search_path}")
+            logger.debug(
+                f"Listed {len(directories)} directories under prefix '{prefix}' in {search_path}"
+            )
         except FileNotFoundError:
-            logger.warning(f"Prefix directory not found for listing directories: {search_path}")
-            return [] # Return empty list if prefix doesn't exist
+            logger.warning(
+                f"Prefix directory not found for listing directories: {search_path}"
+            )
+            return []  # Return empty list if prefix doesn't exist
         except Exception as e:
-            logger.error(f"Error listing directories under prefix '{prefix}' in {search_path}: {e}")
+            logger.error(
+                f"Error listing directories under prefix '{prefix}' in {search_path}: {e}"
+            )
             raise
         return directories
 
@@ -135,7 +149,7 @@ class LocalFileBackend(IStorageBackend):
                 # Use shutil.rmtree for directories, consider making it async if performance critical
                 # For now, using sync version within executor or directly if acceptable
                 # Note: aiofiles.os doesn't have rmtree
-                shutil.rmtree(full_path) # Blocking call
+                shutil.rmtree(full_path)  # Blocking call
                 logger.info(f"Deleted directory: {full_path}")
             elif await aiofiles.os.path.isfile(full_path):
                 await aiofiles.os.remove(full_path)
@@ -150,7 +164,7 @@ class LocalFileBackend(IStorageBackend):
         """Ensure that the directory for the identifier exists."""
         full_path = self._get_full_path(identifier)
         # We want the directory *containing* the identifier if it looks like a file path
-        dir_path = full_path.parent if '.' in full_path.name else full_path
+        dir_path = full_path.parent if "." in full_path.name else full_path
         try:
             await aiofiles.os.makedirs(dir_path, exist_ok=exist_ok)
             logger.debug(f"Ensured directory exists: {dir_path}")

@@ -7,7 +7,13 @@ from datetime import datetime
 
 class IHistoricalDataManager(ABC):
     @abstractmethod
-    async def get_historical_data(self, metadata: Metadata, start: Optional[datetime] = None, end: Optional[datetime] = None, paging: Optional[Paging] = None) -> ExchangeData:
+    async def get_historical_data(
+        self,
+        metadata: Metadata,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        paging: Optional[Paging] = None,
+    ) -> ExchangeData:
         """Get historical data with optional pagination support"""
         pass
 

@@ -29,6 +29,6 @@ class IStorageWriter(ABC):
         context: Dict[str, Any],
         mode: str = "append",
         partition_cols: Optional[List[str]] = None,
-        storage_options: Dict[str, Any] = None
+        storage_options: Dict[str, Any] = None,
     ) -> None:
         pass

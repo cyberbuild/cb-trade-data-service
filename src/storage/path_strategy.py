@@ -32,21 +32,23 @@ class IStoragePathStrategy(ABC):
 class OHLCVPathStrategy(IStoragePathStrategy):
     def get_data_type(self) -> str:
         """Get the data type handled by this path strategy."""
-        return 'ohlcv'
+        return "ohlcv"
 
     def generate_base_path(self, context: Dict[str, Any]) -> str:
-        required_keys = ['exchange', 'coin', 'interval']
+        required_keys = ["exchange", "coin", "interval"]
         if not all(key in context for key in required_keys):
             raise ValueError(f"Context must contain keys: {required_keys}")
 
         record_type = self.get_data_type()
 
-        exchange = str(context['exchange']).lower().replace(' ', '_').strip()
-        coin = str(context['coin']).upper().replace('/', '_').strip()
-        interval = str(context['interval']).lower().strip()
+        exchange = str(context["exchange"]).lower().replace(" ", "_").strip()
+        coin = str(context["coin"]).upper().replace("/", "_").strip()
+        interval = str(context["interval"]).lower().strip()
 
         if not all([exchange, coin, interval]):
-            raise ValueError("Context values (exchange, coin, interval) cannot be empty.")
+            raise ValueError(
+                "Context values (exchange, coin, interval) cannot be empty."
+            )
 
         return f"{record_type}/{exchange}/{coin}/{interval}"
 
@@ -58,18 +60,18 @@ class OHLCVPathStrategy(IStoragePathStrategy):
         record_type = self.get_data_type()
 
         # If exchange is provided, include it in the path
-        if 'exchange' in context:
-            exchange = str(context['exchange']).lower().replace(' ', '_').strip()
+        if "exchange" in context:
+            exchange = str(context["exchange"]).lower().replace(" ", "_").strip()
             prefix = f"{record_type}/{exchange}"
 
             # If coin is also provided, include it too
-            if 'coin' in context:
-                coin = str(context['coin']).upper().replace('/', '_').strip()
+            if "coin" in context:
+                coin = str(context["coin"]).upper().replace("/", "_").strip()
                 prefix = f"{prefix}/{coin}"
 
                 # If interval is also provided, include it as well
-                if 'interval' in context:
-                    interval = str(context['interval']).lower().strip()
+                if "interval" in context:
+                    interval = str(context["interval"]).lower().strip()
                     prefix = f"{prefix}/{interval}"
 
             return prefix
@@ -83,10 +85,14 @@ class OHLCVPathStrategy(IStoragePathStrategy):
         record_type, exchange, coin, interval = parts[:4]
         expected_type = self.get_data_type()
         if record_type != expected_type:
-            raise ValueError(f"Invalid data_type in path: {record_type}, expected: {expected_type}")
-        return Metadata({
-            'data_type': record_type,
-            'exchange': exchange,
-            'coin': coin,
-            'interval': interval
-        })
+            raise ValueError(
+                f"Invalid data_type in path: {record_type}, expected: {expected_type}"
+            )
+        return Metadata(
+            {
+                "data_type": record_type,
+                "exchange": exchange,
+                "coin": coin,
+                "interval": interval,
+            }
+        )

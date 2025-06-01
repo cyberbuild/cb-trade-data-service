@@ -11,7 +11,13 @@ class HistoricalDataManagerImpl(IHistoricalDataManager):
         self._storage_manager = storage_manager
         self._fetcher = HistoricalFetcher(storage_manager)
 
-    async def get_historical_data(self, metadata: Metadata, start: Optional[datetime] = None, end: Optional[datetime] = None, paging: Optional[Paging] = None) -> ExchangeData:
+    async def get_historical_data(
+        self,
+        metadata: Metadata,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        paging: Optional[Paging] = None,
+    ) -> ExchangeData:
         """
         Get historical data with optional pagination support.
         """
@@ -26,7 +32,7 @@ class HistoricalDataManagerImpl(IHistoricalDataManager):
                 end_time=end,
                 limit=paging.limit,
                 offset=paging.offset,
-                output_format="dict"
+                output_format="dict",
             )
             return exchange_data
         except Exception as e:
