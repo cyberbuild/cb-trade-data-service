@@ -1,7 +1,6 @@
 import ccxt.async_support as ccxt
 import logging
-import time
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import List, Optional, Callable, Union
 import datetime
 import asyncio
 
@@ -12,17 +11,18 @@ from exchange_source.clients.iexchange_api_client import IExchangeAPIClient
 
 logger = logging.getLogger(__name__)
 
+
 class CCXTExchangeClient(IExchangeAPIClient):
     def __init__(self, config: CCXTConfig, api_key: Optional[str] = None, **kwargs):
         self.config = config
         self.exchange_id = config.exchange_id
         exchange_class = getattr(ccxt, self.exchange_id)
         params = {'enableRateLimit': True}
-        
+
         if api_key:
             params['apiKey'] = api_key
         params.update(kwargs)
-        
+
         self._exchange = exchange_class(params)
 
     async def close(self):
@@ -120,7 +120,7 @@ class CCXTExchangeClient(IExchangeAPIClient):
 
             # Create standardized data
             standardized_data = self._standardize_ohlcv_data(all_candles)
-            
+
             # Create metadata separately from the data
             metadata = {
                 'data_type': 'ohlcv',
@@ -128,7 +128,7 @@ class CCXTExchangeClient(IExchangeAPIClient):
                 'coin': coin_symbol,
                 'interval': interval
             }
-            
+
             # Return container with data and metadata properly separated
             return ExchangeData(data=standardized_data, metadata=metadata)
         except ValueError:

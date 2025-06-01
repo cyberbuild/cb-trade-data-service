@@ -2,6 +2,7 @@
 import abc
 from typing import List, Dict, Any, Optional
 
+
 class IStorageBackend(abc.ABC):
     """
     Interface for low-level, format-agnostic access to a physical storage medium.
@@ -33,17 +34,17 @@ class IStorageBackend(abc.ABC):
     async def list_items(self, prefix: str = "") -> List[str]:
         """Lists identifiers (files/directories) matching a given prefix."""
         pass
-    
+
     @abc.abstractmethod
     async def list_directories(self, prefix: str = "") -> List[str]:
         """Lists only directories (not files) matching a given prefix."""
         pass
-    
+
     @abc.abstractmethod
     async def exists(self, identifier: str) -> bool:
         """Checks if the specified identifier exists."""
         pass
-    
+
     def get_base_path(self, context: Dict[str, Any]) -> str:
         """
         Returns the base path for this storage backend.

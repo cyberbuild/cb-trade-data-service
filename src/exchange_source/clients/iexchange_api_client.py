@@ -1,7 +1,8 @@
 # filepath: c:\Project\cyberbuild\cb-trade\cb-trade-data-service\src\exchange_source\clients\base.py
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator, Union, List, Dict
+from typing import Any
 from exchange_source.models import ExchangeData, IExchangeRecord
+
 
 class IExchangeAPIClient(ABC):
     @abstractmethod
@@ -10,9 +11,11 @@ class IExchangeAPIClient(ABC):
         pass
 
     @abstractmethod
-    async def fetch_ohlcv_data(self, coin_symbol: str, start_time: Any, end_time: Any,
-                              interval: str = '5m') -> 'ExchangeData[IExchangeRecord]': # Use forward reference
-        """Fetch OHLCV (Open-High-Low-Close-Volume) data for a coin between start_time and end_time."""
+    async def fetch_ohlcv_data(self,
+                               coin_symbol: str,
+                               start_time: Any,
+                               end_time: Any,
+                               interval: str = '5m') -> 'ExchangeData[IExchangeRecord]': # Use forward reference
         pass
 
     @abstractmethod

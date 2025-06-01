@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 \
 from exchange_source.models import Metadata
 
+
 class IPartitionStrategy(ABC):
     """
     Abstract base class for defining partitioning strategies for data storage.
@@ -20,9 +21,11 @@ class IPartitionStrategy(ABC):
         """
         pass
 
+
 class YearMonthDayPartitionStrategy(IPartitionStrategy):
-    def get_partition_cols(self, metadata: Metadata) -> Optional[List[str]]:     
+    def get_partition_cols(self, metadata: Metadata) -> Optional[List[str]]:
         return ["year", "month", "day"]
+
 
 class NoPartitionStrategy(IPartitionStrategy):
     def get_partition_cols(self, metadata: Metadata) -> Optional[List[str]]:

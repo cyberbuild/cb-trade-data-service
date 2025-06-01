@@ -1,9 +1,8 @@
 import logging
 import sys
-from functools import lru_cache # Add this import
+from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import SecretStr, Field
-from typing import Literal, Dict, Optional
+from pydantic import Field
 
 # Import the new storage config structure
 from storage.storage_settings import StorageConfig
@@ -12,7 +11,7 @@ from exchange_source.config import CCXTConfig
 
 # Basic logging configuration (can be refined later)
 logging.basicConfig(
-    level=logging.INFO, # Or load from config settings.log_level
+    level=logging.INFO,  # Or load from config settings.log_level
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -20,7 +19,9 @@ logging.basicConfig(
     ]
 )
 
+
 # Add other config models as needed (e.g., AppConfig for log level)
+
 
 class Settings(BaseSettings):
     # Top-level settings object to hold nested configs
@@ -34,10 +35,11 @@ class Settings(BaseSettings):
     # Pydantic-settings automatically loads .env files by default
     # Configure loading behavior
     model_config = SettingsConfigDict(
-        env_file='.env', # Load .env file
+        env_file='.env',  # Load .env file
         extra='ignore',  # Ignore extra fields not defined in the models
-        env_nested_delimiter='__' # Use double underscore for nested env vars e.g. STORAGE__AZURE_CONTAINER_NAME
+        env_nested_delimiter='__'  # Use double underscore for nested env vars
     )
+
 
 # Optional: Function to get settings easily
 @lru_cache()
@@ -51,8 +53,9 @@ def get_settings() -> Settings:
 #     if isinstance(storage_settings, LocalStorageSettings):
 #         logging.info(f"Using local storage at: {storage_settings.root_path}")
 #     elif isinstance(storage_settings, AzureStorageSettings):
-#         logging.info(f"Using Azure storage container: {storage_settings.container_name}")
+#         logging.info(
+#             f"Using Azure storage container: {storage_settings.container_name}"
+#         )
 # except Exception as e:
 #     logging.error(f"Failed to load or validate settings: {e}")
-#     # Handle error appropriately, maybe exit
 #     sys.exit(1)

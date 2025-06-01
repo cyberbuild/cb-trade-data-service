@@ -4,6 +4,7 @@ from storage.paging import Paging
 from typing import Optional
 from datetime import datetime
 
+
 class IHistoricalDataManager(ABC):
     @abstractmethod
     async def get_historical_data(self, metadata: Metadata, start: Optional[datetime] = None, end: Optional[datetime] = None, paging: Optional[Paging] = None) -> ExchangeData:

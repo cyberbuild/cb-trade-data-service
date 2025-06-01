@@ -1,12 +1,12 @@
 # filepath: c:\Project\cyberbuild\cb-trade\cb-trade-data-service\src\storage\config.py
 import os
 import logging
-from pathlib import Path # Add this import
-from pydantic import Field, SecretStr, model_validator, ValidationInfo, BaseModel
+from pydantic import Field, SecretStr, model_validator, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Literal, Union, Optional, Annotated, Any, Dict, List # Add required types
+from typing import Literal, Union, Annotated, Any, Dict, List # Add required types
 
 logger = logging.getLogger(__name__)
+
 
 # Define settings for Local Storage
 class LocalStorageSettings(BaseSettings):
@@ -32,6 +32,8 @@ class LocalStorageSettings(BaseSettings):
         return data
 
 # Define settings for Azure Storage
+
+
 class AzureStorageSettings(BaseSettings):
     # Allow ignoring extra fields from environment for discriminated union
     model_config = SettingsConfigDict(extra='ignore')
@@ -41,12 +43,14 @@ class AzureStorageSettings(BaseSettings):
     connection_string: SecretStr = Field(..., validation_alias='STORAGE_AZURE_CONNECTION_STRING')
     container_name: str = Field(default='rawdata', validation_alias='STORAGE_AZURE_CONTAINER_NAME')
 
+
 # Create a Discriminated Union using Annotated and Field
 # This tells Pydantic to use the 'type' field to determine which model to use
 StorageConfig = Annotated[
     Union[LocalStorageSettings, AzureStorageSettings],
     Field(discriminator="type")
 ]
+
 
 # Storage settings for operations
 class StorageSettings(BaseModel):
@@ -56,6 +60,7 @@ class StorageSettings(BaseModel):
     format_hint: str = "delta"
     mode: str = "overwrite"
     timestamp_col: str = "timestamp"
+
 
 # Helper function to get the specific storage config instance
 # This might be useful if the main Settings object holds the Union directly

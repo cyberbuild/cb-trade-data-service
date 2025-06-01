@@ -1,17 +1,8 @@
 import logging
-logger = logging.getLogger(__name__)
-
-from typing import List, Dict, Any, Optional, Union, Type, TypeVar, Generic
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-import pyarrow.json as pj
-import pyarrow.compute as pc
-from deltalake import DeltaTable, write_deltalake
+from typing import List, Dict, Any, Optional, Type, TypeVar, Generic
 from deltalake.exceptions import TableNotFoundError
 from datetime import datetime
-from pathlib import Path
-import io
+
 from abc import ABC, abstractmethod
 
 from .backends.istorage_backend import IStorageBackend
@@ -24,6 +15,7 @@ from exchange_source.models import Metadata, ExchangeData, IExchangeRecord, OHLC
 logger = logging.getLogger(__name__)
 
 TExchangeRecord = TypeVar('TRecord', bound=IExchangeRecord)
+
 
 # --- Interface Definition ---
 class IStorageManager(ABC, Generic[TExchangeRecord]):
@@ -68,8 +60,8 @@ class IStorageManager(ABC, Generic[TExchangeRecord]):
             Optional[ExchangeData[TExchangeRecord]]: An ExchangeData object containing the requested data,
                                                     or None if not found.
         """
-        pass    
-    
+        pass
+
     @abstractmethod
     async def check_coin_exists(
         self,
@@ -80,7 +72,7 @@ class IStorageManager(ABC, Generic[TExchangeRecord]):
     ) -> bool:
         """Checks if data exists for a specific coin, exchange, data type, and interval."""
         pass
-        
+
     @abstractmethod
     async def list_coins(
         self,
@@ -92,7 +84,9 @@ class IStorageManager(ABC, Generic[TExchangeRecord]):
 
 
 # --- Implementation ---
-class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved interface
+
+
+class StorageManager(IStorageManager[TExchangeRecord]):
     """
     Implements the high-level storage logic, handling formats, paths, and partitioning.
     Uses injected strategies for backend, path generation, writing, formatting, and partitioning.
@@ -121,23 +115,23 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
              raise ValueError("Writer instance must be provided.")
         self.writer = writer        # Use provided partition strategy or a default one if applicable
         self.partition_strategy = partition_strategy or YearMonthDayPartitionStrategy() # Assuming YearMonthDay is default
-        
+
         logger.info(f"StorageManager initialized with: "
                     f"Backend={type(self.backend).__name__}, "
                     f"PathStrategy={type(self.path_strategy).__name__}, "
                     f"Writer={type(self.writer).__name__}, "
                     f"PartitionStrategy={type(self.partition_strategy).__name__}")
-    
+
     @property
     @abstractmethod
     def record_type(self) -> Type[TExchangeRecord]:
         """The concrete IExchangeRecord subclass this manager handles."""
         pass
-        
+
     # --- Data Loading ---
     async def get_range(
         self,
-        metadata: Metadata, 
+        metadata: Metadata,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         columns: Optional[List[str]] = None
@@ -182,29 +176,29 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
         except Exception as e:
             logger.error(f"Failed to load data from {base_path}: {e}", exc_info=True)
             raise
-            
+
     async def get_most_current_data(self, symbol: str, interval: str) -> Optional[Dict[str, Any]]:
         """
         Get the most recent data entry for a symbol and interval.
-        
+
         Args:
             symbol: Trading pair symbol (e.g., 'BTC/USD')
             interval: Interval string (e.g., '1m', '5m')
-            
+
         Returns:
             Dict containing the most recent record or None if no data exists
         """
         from exchange_source.models import Metadata
-        
+
         metadata = Metadata(
             data_type='ohlcv',
             exchange='',  # Will be filled from actual data if needed
             coin=symbol,
             interval=interval
         )
-        
+
         base_path = self.path_strategy.generate_base_path(metadata)
-        
+
         try:
             # Load the table and get the latest entry by timestamp
             table = await self.writer.load_range(
@@ -216,51 +210,51 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
                 columns=None,
                 timestamp_col='timestamp'
             )
-            
+
             if table is None or (hasattr(table, 'num_rows') and table.num_rows == 0):
                 return None
-                
+
             # Convert to pandas to easily find max timestamp
             df = table.to_pandas()
             if df.empty:
                 return None
-                
+
             # Find the row with maximum timestamp
             latest_row = df.loc[df['timestamp'].idxmax()]
             return latest_row.to_dict()
-            
+
         except TableNotFoundError:
             logger.warning(f"Table not found at path: {base_path}")
             return None
         except Exception as e:
             logger.error(f"Error getting most current data: {e}")
             return None
-            
+
     async def check_coin_exists(self, exchange_name: str, coin_symbol: str, data_type: str, interval: Optional[str] = None) -> bool:
         """Checks if any data exists for a specific coin using the path strategy."""
         context = Metadata({
-            'data_type': data_type, 
-            'exchange': exchange_name, 
+            'data_type': data_type,
+            'exchange': exchange_name,
             'coin': coin_symbol,
-            'interval': interval 
+            'interval': interval
         })
 
-        prefix = self.path_strategy.generate_base_path(context) + '/' 
+        prefix = self.path_strategy.generate_base_path(context) + '/'
         logger.debug(f"Checking existence with prefix: {prefix}")
-       
+
         items = await self.backend.list_items(prefix)
         exists = bool(items)
         logger.info(f"Existence check for {prefix}: {exists}")
         return exists
-    
+
     async def list_coins(self, exchange_name: str, data_type: str) -> List[str]:
         """
         Lists all available coins for a specific exchange and data type.
-        
+
         Args:
             exchange_name: The name of the exchange
             data_type: The type of data (e.g., 'ohlcv')
-            
+
         Returns:
             List[str]: List of coin symbols available
         """
@@ -270,11 +264,11 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
             'data_type': data_type,
             'exchange': exchange_name
         })
-        
+
         # Generate the base directory to search
         base_dir = self.path_strategy.generate_path_prefix(partial_context)
         logger.debug(f"Listing coins with prefix: {base_dir}")
-        
+
         # List all subdirectories (coins) under this path
         try:
             items = await self.backend.list_directories(base_dir)
@@ -286,7 +280,7 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
             logger.error(f"Failed to list coins for {exchange_name}/{data_type}: {e}")
             return []
 
- 
+
     async def save_entry(self, exchange_data: ExchangeData[TExchangeRecord], **kwargs):
         """
         Saves a single data entry using the configured formatter, writer, and strategies.
@@ -322,8 +316,8 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
             logger.error(f"Failed to determine partition columns for {metadata}: {e}", exc_info=True)
             # Decide behavior: proceed without partitioning or raise?
             # Let's proceed without partitioning for now, but log warning.
-            logger.warning(f"Proceeding without partitioning due to error in strategy.")
-            partition_cols = None 
+            logger.warning("Proceeding without partitioning due to error in strategy.")
+            partition_cols = None
 
         # 4. Write data using the writer
         # Determine timestamp_col and type from data or metadata
@@ -351,6 +345,7 @@ class StorageManager(IStorageManager[TExchangeRecord]): # Inherit from moved int
             raise
         return self
 
+
 class OHLCVStorageManager(StorageManager[OHLCVRecord]): # Specify the concrete type here
 
     @property
@@ -360,12 +355,12 @@ class OHLCVStorageManager(StorageManager[OHLCVRecord]): # Specify the concrete t
 
     def __init__(
         self,
-        backend: IStorageBackend, 
-        writer: IStorageWriter, 
+        backend: IStorageBackend,
+        writer: IStorageWriter,
         path_strategy: IStoragePathStrategy,
         partition_strategy: IPartitionStrategy = None
     ):
-        partition_strategy_instance = partition_strategy or YearMonthDayPartitionStrategy() 
+        partition_strategy_instance = partition_strategy or YearMonthDayPartitionStrategy()
         logger.info(f"OHLCVStorageManager using partition strategy: {type(partition_strategy_instance).__name__}.")
 
         super().__init__(
@@ -374,4 +369,3 @@ class OHLCVStorageManager(StorageManager[OHLCVRecord]): # Specify the concrete t
             path_strategy=path_strategy,
             partition_strategy=partition_strategy_instance
         )
-

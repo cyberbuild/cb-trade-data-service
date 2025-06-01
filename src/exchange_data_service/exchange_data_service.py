@@ -1,31 +1,29 @@
-import asyncio
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Dict, get_args, Literal
+from typing import Optional
 from datetime import datetime, timedelta
-from enum import Enum, auto
-from exchange_source.models import IExchangeRecord, ExchangeData
-from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
+
+from exchange_source.models import ExchangeData
 from .interface import IExchangeDataService, Interval
 from storage.paging import Paging
-
-from config import Settings
-
 from historical.manager import IHistoricalDataManager
 from exchange_source.clients.iexchange_api_client import IExchangeAPIClient
 
 
 class ExchangeDataService(IExchangeDataService):
-    def __init__(self, exchange_client: IExchangeAPIClient, historical_manager: IHistoricalDataManager):
+    def __init__(self, exchange_client: IExchangeAPIClient,
+                 historical_manager: IHistoricalDataManager):
         self.historical_manager = historical_manager
         self.exchange_client = exchange_client
 
-    async def get_ohlcv_data(self, symbol: str, interval: Interval, start: Optional[datetime] = None, end: Optional[datetime] = None, paging: Optional[Paging] = None) -> ExchangeData:
+    async def get_ohlcv_data(self, symbol: str, interval: Interval,
+                             start: Optional[datetime] = None,
+                             end: Optional[datetime] = None,
+                             paging: Optional[Paging] = None
+                             ) -> ExchangeData:
         """
         Get OHLCV data with optional pagination support
         """
         await self.sync_with_exchange(symbol, interval)
 
-        # Create metadata using dynamic values from components
         from exchange_source.models import Metadata
         metadata = Metadata({
             'data_type': 'ohlcv',
@@ -33,17 +31,18 @@ class ExchangeDataService(IExchangeDataService):
             'coin': symbol,
             'interval': interval.value
         })
-        
-        # Default to all records if no paging specified
+
         if paging is None:
             paging = Paging.all_records()
-        
-        # Get data using the historical manager with pagination support
-        return await self.historical_manager.get_historical_data(metadata, start, end, paging)
-        
-    async def sync_with_exchange(self, symbol: str, interval: Interval) -> 'IExchangeDataService':
+
+        return await self.historical_manager.get_historical_data(
+            metadata, start, end, paging
+        )
+
+    async def sync_with_exchange(self, symbol: str,
+                                 interval: Interval
+                                 ) -> 'IExchangeDataService':
         try:
-            # Create metadata for getting the latest entry
             from exchange_source.models import Metadata
             metadata = Metadata({
                 'data_type': 'ohlcv',
@@ -51,60 +50,52 @@ class ExchangeDataService(IExchangeDataService):
                 'coin': symbol,
                 'interval': interval.value
             })
-            
-            # Get the latest entry from historical storage
-            latest_entry = await self.historical_manager.get_most_current_data(metadata)
-            
+
+            latest_entry = await self.historical_manager.get_most_current_data(
+                metadata
+            )
+
             now = datetime.now()
-            # Get the timedelta directly from the interval enum
-            interval_delta = interval.to_timedelta()            # Determine if we need to fetch new data
+            interval_delta = interval.to_timedelta()
             if latest_entry is None:
-                # No data exists, fetch from maximum 1 day for testing
-                start_time = now - timedelta(days=1)  # Maximum 1 day for testing
+                start_time = now - timedelta(days=1)
                 need_sync = True
             else:
-                # Check if the latest entry is recent enough based on interval
                 latest_timestamp = latest_entry.get('timestamp')
                 if isinstance(latest_timestamp, int):
-                    # Convert from milliseconds to datetime
-                    latest_datetime = datetime.fromtimestamp(latest_timestamp / 1000)
+                    latest_datetime = datetime.fromtimestamp(
+                        latest_timestamp / 1000
+                    )
                 else:
-                    # Assume it's already a datetime
                     latest_datetime = latest_timestamp
-                
-                # Calculate time since last update
+
                 time_since_last = now - latest_datetime
-                
-                # Only sync if we're behind by more than one interval
                 need_sync = time_since_last > interval_delta
                 start_time = latest_datetime
-            
-            # If sync is needed, fetch data from exchange
+
             if need_sync:
-                # Create metadata context
                 context = {
                     'exchange': self.exchange_client.get_exchange_name(),
                     'symbol': symbol,
-                    'interval': interval.value  # Pass the string value to the context
+                    'interval': interval.value
                 }
-                
-                # Fetch data from the exchange
+
                 exchange_data = await self.exchange_client.fetch_ohlcv_data(
                     coin_symbol=symbol,
                     start_time=start_time,
                     end_time=now,
-                    interval=interval.value  # Pass the string value to the client
+                    interval=interval.value
                 )
 
-                # Save to historical data service
                 if exchange_data and exchange_data.data:
-                    await self.historical_manager.save_data(context, exchange_data)
+                    await self.historical_manager.save_data(
+                        context, exchange_data
+                    )
 
         except Exception as e:
-            # Log the error but don't crash
             print(f"Error syncing data for {symbol} {interval.value}: {e}")
 
         finally:
-             await self.exchange_client.close()
-        
+            await self.exchange_client.close()
+
         return self

@@ -3,12 +3,13 @@ import os
 import shutil
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import aiofiles
 import aiofiles.os
 from .istorage_backend import IStorageBackend
 
 logger = logging.getLogger(__name__)
+
 
 class LocalFileBackend(IStorageBackend):
     def __init__(self, root_path: str):
@@ -23,8 +24,6 @@ class LocalFileBackend(IStorageBackend):
         full_path = (self.root_path / identifier).resolve()
         # Security check: Ensure the path is still within the root directory
         if self.root_path not in full_path.parents and full_path != self.root_path:
-             # This check might be too strict if identifier itself contains '..'
-             # A better check might be os.path.commonpath
              common = os.path.commonpath([str(self.root_path), str(full_path)])
              if common != str(self.root_path):
                 raise ValueError(f"Path traversal attempt detected: {identifier}")
@@ -111,7 +110,7 @@ class LocalFileBackend(IStorageBackend):
                     if await aiofiles.os.path.isdir(entry_path):
                         relative_path = entry_path.relative_to(self.root_path).as_posix()
                         directories.append(relative_path)
-                
+
             logger.debug(f"Listed {len(directories)} directories under prefix '{prefix}' in {search_path}")
         except FileNotFoundError:
             logger.warning(f"Prefix directory not found for listing directories: {search_path}")
@@ -154,11 +153,11 @@ class LocalFileBackend(IStorageBackend):
         dir_path = full_path.parent if '.' in full_path.name else full_path
         try:
             await aiofiles.os.makedirs(dir_path, exist_ok=exist_ok)
-            logger.debug(f"Ensured directory exists: {dir_path}")        
+            logger.debug(f"Ensured directory exists: {dir_path}")
         except Exception as e:
             logger.error(f"Error creating directory {dir_path}: {e}")
             raise
-            
+
     def get_base_path(self, context: Dict[str, Any]) -> str:
         """
         Returns the root path as the base path.
@@ -169,4 +168,3 @@ class LocalFileBackend(IStorageBackend):
         # The actual path structure comes from the storage manager's path strategy
         logger.debug(f"Local backend returning root path as base: {self.root_path}")
         return str(self.root_path)
-

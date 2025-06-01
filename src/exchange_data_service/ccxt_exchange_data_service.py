@@ -1,9 +1,9 @@
+from datetime import timedelta
 
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
-from exchange_source.models import IExchangeRecord, ExchangeData
 from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
 from .exchange_data_service import ExchangeDataService
+from config import Settings
+from historical.manager import IHistoricalDataManager
 
 INTERVALS = {
     '1m': timedelta(minutes=1),
@@ -15,15 +15,8 @@ INTERVALS = {
 }
 
 
-from config import Settings
-
-from historical.manager import IHistoricalDataManager
-from exchange_source.clients.iexchange_api_client import IExchangeAPIClient
-
-
-
 class CCXTExchangeDataService(ExchangeDataService):
-    def __init__(self, settings: Settings, historical_data_manager: IHistoricalDataManager):
+    def __init__(self, settings: Settings,
+                 historical_data_manager: IHistoricalDataManager):
         exchange_client = CCXTExchangeClient(config=settings.ccxt)
         super().__init__(exchange_client, historical_data_manager)
-        

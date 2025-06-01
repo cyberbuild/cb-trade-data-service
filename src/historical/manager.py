@@ -2,8 +2,9 @@ from historical.fetcher import HistoricalFetcher
 from historical.interfaces import IHistoricalDataManager
 from exchange_source.models import ExchangeData, Metadata
 from storage.paging import Paging
-from typing import Dict, Any, Optional
+from typing import Optional
 from datetime import datetime
+
 
 class HistoricalDataManagerImpl(IHistoricalDataManager):
     def __init__(self, storage_manager):
@@ -18,7 +19,7 @@ class HistoricalDataManagerImpl(IHistoricalDataManager):
             # Default to all records if no paging specified
             if paging is None:
                 paging = Paging.all_records()
-            
+
             exchange_data = await self._fetcher.fetch_data(
                 metadata=metadata,
                 start_time=start,

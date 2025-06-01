@@ -1,7 +1,8 @@
 # filepath: c:\Project\cyberbuild\cb-trade\cb-trade-data-service\src\exchange_source\config.py
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 from pydantic_settings import SettingsConfigDict # Import ConfigDict from pydantic_settings if using BaseSettings, or from pydantic otherwise
 from typing import Optional
+
 
 class CCXTConfig(BaseModel):
     """Configuration specific to the CCXT library and exchanges."""
@@ -23,6 +24,6 @@ class CCXTConfig(BaseModel):
 
     # Use model_config with ConfigDict instead of nested class Config
     model_config = SettingsConfigDict(
-        env_prefix = "CCXT_" # Prefix for environment variables
+        env_prefix = "CCXT_"  # Prefix for environment variables
         # Consider case_sensitive = False if env vars might have different casing
     )

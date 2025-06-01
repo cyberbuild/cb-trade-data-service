@@ -12,6 +12,7 @@ from .interfaces import ISecretProvider
 
 logger = logging.getLogger(__name__)
 
+
 class DotEnvSecretProvider(ISecretProvider):
     """Retrieves secrets from environment variables or a .env file."""
 
@@ -32,6 +33,7 @@ class DotEnvSecretProvider(ISecretProvider):
         else:
             logger.warning(f"Secret '{secret_name}' not found in environment.")
             return None
+
 
 class KeyVaultSecretProvider(ISecretProvider):
     """Retrieves secrets from Azure Key Vault."""
@@ -56,11 +58,10 @@ class KeyVaultSecretProvider(ISecretProvider):
         self.client = None # Placeholder
 
     def get_secret(self, secret_name: str) -> Optional[SecretStr]:
-        """Retrieves secret from Azure Key Vault."""
         if self.client is None:
-             logger.error("Key Vault client not initialized. Cannot fetch secrets.")
-             # raise RuntimeError("Key Vault client not initialized.") # Or return None
-             return None # Returning None for now
+            logger.error("Key Vault client not initialized. Cannot fetch secrets.")
+            # raise RuntimeError("Key Vault client not initialized.") # Or return None
+            return None # Returning None for now
 
         # Key Vault secret names often use dashes instead of underscores
         kv_secret_name = secret_name.replace('_', '-')
@@ -79,6 +80,7 @@ class KeyVaultSecretProvider(ISecretProvider):
             logger.error(f"Error retrieving secret '{kv_secret_name}' from Key Vault: {e}")
             # Re-raise or return None depending on desired behavior
             return None # Or raise e
+
 
 # Factory function (optional)
 def get_secret_provider(provider_type: str = "dotenv", **kwargs) -> ISecretProvider:

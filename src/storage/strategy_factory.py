@@ -1,6 +1,7 @@
 from typing import Dict, Any, Type
 from storage.path_strategy import IStoragePathStrategy, OHLCVPathStrategy
 
+
 class DataTypeRegistry:
     """Registry mapping data types to their appropriate path strategies"""
     _registry = {}
