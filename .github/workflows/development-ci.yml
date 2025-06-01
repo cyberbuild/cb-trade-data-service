@@ -79,14 +79,14 @@ jobs:
         run: |
           echo "Running linters and format checkers. Flake8 and Black should be installed via environment.yml."
           flake8 . --exclude tests # Exclude the tests folder from flake8
-          black --check . --exclude tests # Optionally exclude tests from black as well
-
-      # 6. Debug Environment Variables for Tests
+          black --check . --exclude tests # Optionally exclude tests from black as well      # 6. Debug Environment Variables for Tests
       # This step helps verify if secrets and env vars are being set as expected.
-      # It DOES NOT print the actual values of secrets for security.      - name: Debug Environment Variables for Tests
+      # It DOES NOT print the actual values of secrets for security.
+      - name: Debug Environment Variables for Tests
         # Ensures conda environment is activated for this step by using a login shell
         shell: bash -l {0}
-        env: # Pass the same env vars as the test step to check them          # Azure authentication for managed identity (GitHub OIDC)
+        env: # Pass the same env vars as the test step to check them
+          # Azure authentication for managed identity (GitHub OIDC)
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
           STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
