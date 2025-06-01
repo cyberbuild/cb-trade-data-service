@@ -86,12 +86,12 @@ jobs:
       # It DOES NOT print the actual values of secrets for security.      - name: Debug Environment Variables for Tests
         # Ensures conda environment is activated for this step by using a login shell
         shell: bash -l {0}
-        env: # Pass the same env vars as the test step to check them
-          # Azure authentication for managed identity (GitHub OIDC)
+        env: # Pass the same env vars as the test step to check them          # Azure authentication for managed identity (GitHub OIDC)
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
           STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-            STORAGE__TYPE: local
+          
+          STORAGE_TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data
           CCXT_DEFAULT_EXCHANGE: cryptocom
         run: |
