@@ -47,7 +47,7 @@ jobs:
       # Best practice: include pip, build, pytest, wheel in environment.yml dependencies.
       - name: Install build and test tools (if needed)
         # Ensures conda environment is activated for this step
-        shell: bash -l
+        shell: bash
         run: |
           echo "Ensuring build tools are present. Best practice: include them in environment.yml."
           # If 'pip', 'build', 'pytest', 'wheel' are in environment.yml, this step might be mainly for confirmation.
@@ -59,7 +59,7 @@ jobs:
       # Ensure these are run within the conda environment.
       - name: Lint and Format Check
         # Ensures conda environment is activated
-        shell: bash -l
+        shell: bash
         run: |
           # Ensure linters are installed in the conda env (e.g., via environment.yml)
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
@@ -69,7 +69,7 @@ jobs:
       # Assumes tests are run with pytest, using the conda environment's Python.
       - name: Run tests with Pytest
         # Ensures conda environment is activated
-        shell: bash -l
+        shell: bash
         run: pytest
 
       # 6. Build package
@@ -77,7 +77,7 @@ jobs:
       # It should use the Python from the activated conda environment.
       - name: Build package
         # Ensures conda environment is activated
-        shell: bash -l
+        shell: bash
         run: python -m build
 
       # 7. Publish to GitHub Packages (only on direct push to development)
