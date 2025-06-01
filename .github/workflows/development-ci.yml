@@ -64,8 +64,7 @@ jobs:
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Flake8 and Black should be installed from environment.yml's pip section by Step 2.
-      # Flake8 will use the .flake8 configuration file in the project root if present,
-      # or the command-line options. Here we explicitly exclude the 'tests' folder.
+      # Flake8 will use the .flake8 configuration file in the project root.
       - name: Lint and Format Check
         # Ensures conda environment is activated for this step by using a login shell
         shell: bash -l {0}
@@ -74,10 +73,60 @@ jobs:
           flake8 . --exclude tests # Exclude the tests folder from flake8
           black --check . --exclude tests # Optionally exclude tests from black as well
 
-      # 5. Run tests
+      # 5. Debug Environment Variables for Tests
+      # This step helps verify if secrets and env vars are being set as expected.
+      # It DOES NOT print the actual values of secrets for security.
+      - name: Debug Environment Variables for Tests
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
+        env: # Pass the same env vars as the test step to check them
+          STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
+          STORAGE__AZURE__CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          CCXT_CRYPTO_COM_API_KEY: ${{ secrets.CCXT_CRYPTO_COM_API_KEY }}
+          CCXT_CRYPTO_COM_SECRET: ${{ secrets.CCXT_CRYPTO_COM_SECRET }}
+          STORAGE__TYPE: local
+          STORAGE_LOCAL_ROOT_PATH: ./test_data
+          CCXT_DEFAULT_EXCHANGE: cryptocom
+        run: |
+          echo "--- Debugging Environment Variables ---"
+          echo "Checking for STORAGE_AZURE_CONNECTION_STRING..."
+          if [ -n "$STORAGE_AZURE_CONNECTION_STRING" ]; then
+            echo "STORAGE_AZURE_CONNECTION_STRING is SET (length: ${#STORAGE_AZURE_CONNECTION_STRING})"
+          else
+            echo "STORAGE_AZURE_CONNECTION_STRING is NOT SET"
+          fi
+
+          echo "Checking for STORAGE__AZURE__CONTAINER_NAME..."
+          if [ -n "$STORAGE__AZURE__CONTAINER_NAME" ]; then
+            echo "STORAGE__AZURE__CONTAINER_NAME is SET (value: $STORAGE__AZURE__CONTAINER_NAME)"
+          else
+            echo "STORAGE__AZURE__CONTAINER_NAME is NOT SET"
+          fi
+
+          echo "Checking for CCXT_CRYPTO_COM_API_KEY..."
+          if [ -n "$CCXT_CRYPTO_COM_API_KEY" ]; then
+            echo "CCXT_CRYPTO_COM_API_KEY is SET (length: ${#CCXT_CRYPTO_COM_API_KEY})"
+          else
+            echo "CCXT_CRYPTO_COM_API_KEY is NOT SET or empty"
+          fi
+
+          echo "Checking for CCXT_CRYPTO_COM_SECRET..."
+          if [ -n "$CCXT_CRYPTO_COM_SECRET" ]; then
+            echo "CCXT_CRYPTO_COM_SECRET is SET (length: ${#CCXT_CRYPTO_COM_SECRET})"
+          else
+            echo "CCXT_CRYPTO_COM_SECRET is NOT SET or empty"
+          fi
+
+          echo "STORAGE__TYPE is: $STORAGE__TYPE"
+          echo "STORAGE_LOCAL_ROOT_PATH is: $STORAGE_LOCAL_ROOT_PATH"
+          echo "CCXT_DEFAULT_EXCHANGE is: $CCXT_DEFAULT_EXCHANGE"
+          echo "--- End Debugging Environment Variables ---"
+
+      # 6. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.
+      # --tb=long ensures full tracebacks are shown for all failures.
       - name: Run tests with Pytest
         # Ensures conda environment is activated for this step by using a login shell
         shell: bash -l {0}
@@ -92,16 +141,16 @@ jobs:
           STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data # Relative path for local testing within the repo
           CCXT_DEFAULT_EXCHANGE: cryptocom
-        run: pytest
+        run: pytest --tb=long
 
-      # 6. Build package
+      # 7. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
       - name: Build package
         # Ensures conda environment is activated for this step by using a login shell
         shell: bash -l {0}
         run: python -m build
 
-      # 7. Publish to GitHub Packages (only on direct push to development)
+      # 8. Publish to GitHub Packages (only on direct push to development)
       - name: Publish package to GitHub Packages
         if: github.event_name == 'push' && github.ref == 'refs/heads/development'
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -110,7 +159,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           repository_url: https://pypi.pkg.github.com/YOUR_USERNAME_OR_ORG/ # IMPORTANT: Replace with your GitHub username or organization
 
-      # 8. Create Pull Request from development to master (only on direct push to development)
+      # 9. Create Pull Request from development to master (only on direct push to development)
       - name: Create Pull Request to master
         if: github.event_name == 'push' && github.ref == 'refs/heads/development'
         uses: peter-evans/create-pull-request@v6
