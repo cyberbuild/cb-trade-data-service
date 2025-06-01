@@ -20,6 +20,7 @@ dependencies:
   - pytest-timeout
   - aiofiles
   - python-dotenv
+  - pyarrow
   - pip:
     - ccxt  # Install ccxt using pip
     - flake8 # Added linter
