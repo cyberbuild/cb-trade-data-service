@@ -80,66 +80,8 @@ jobs:
           echo "Running linters and format checkers. Flake8 and Black should be installed via environment.yml."
           flake8 . --exclude tests # Exclude the tests folder from flake8
           black --check . --exclude tests # Optionally exclude tests from black as well      # 6. Debug Environment Variables for Tests
-      # This step helps verify if secrets and env vars are being set as expected.
-      # It DOES NOT print the actual values of secrets for security.
-      - name: Debug Environment Variables for Tests
-        # Ensures conda environment is activated for this step by using a login shell
-        shell: bash -l {0}
-        env: # Pass the same env vars as the test step to check them
-          # Azure authentication for managed identity (GitHub OIDC)
-          STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
-          STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
-          STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-          STORAGE__TYPE: local
-          STORAGE_LOCAL_ROOT_PATH: ./test_data
-          CCXT__DEFAULT_EXCHANGE: cryptocom
-        run: |
-          echo "--- Debugging Environment Variables ---"
-          echo "Checking for STORAGE_AZURE_ACCOUNT_NAME..."
-          if [ -n "$STORAGE_AZURE_ACCOUNT_NAME" ]; then
-            echo "STORAGE_AZURE_ACCOUNT_NAME is SET (value: $STORAGE_AZURE_ACCOUNT_NAME)"
-          else
-            echo "STORAGE_AZURE_ACCOUNT_NAME is NOT SET"
-          fi
-
-          echo "Checking for STORAGE_AZURE_USE_MANAGED_IDENTITY..."
-          if [ -n "$STORAGE_AZURE_USE_MANAGED_IDENTITY" ]; then
-            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is SET (value: $STORAGE_AZURE_USE_MANAGED_IDENTITY)"
-          else
-            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is NOT SET"
-          fi
-
-          echo "Checking for STORAGE_AZURE_CONNECTION_STRING (fallback)..."
-          if [ -n "$STORAGE_AZURE_CONNECTION_STRING" ]; then
-            echo "STORAGE_AZURE_CONNECTION_STRING is SET (length: ${#STORAGE_AZURE_CONNECTION_STRING})"
-          else
-            echo "STORAGE_AZURE_CONNECTION_STRING is NOT SET"
-          fi
-
-          echo "Checking for STORAGE_AZURE_CONTAINER_NAME..."
-          if [ -n "$STORAGE_AZURE_CONTAINER_NAME" ]; then
-            echo "STORAGE_AZURE_CONTAINER_NAME is SET (value: $STORAGE_AZURE_CONTAINER_NAME)"
-          else
-            echo "STORAGE_AZURE_CONTAINER_NAME is NOT SET"
-          fi
-
-          echo "Checking for CCXT_CRYPTO_COM_API_KEY..."
-          if [ -n "$CCXT_CRYPTO_COM_API_KEY" ]; then
-            echo "CCXT_CRYPTO_COM_API_KEY is SET (length: ${#CCXT_CRYPTO_COM_API_KEY})"
-          else
-            echo "CCXT_CRYPTO_COM_API_KEY is NOT SET or empty"
-          fi
-
-          echo "Checking for CCXT_CRYPTO_COM_SECRET..."
-          if [ -n "$CCXT_CRYPTO_COM_SECRET" ]; then
-            echo "CCXT_CRYPTO_COM_SECRET is SET (length: ${#CCXT_CRYPTO_COM_SECRET})"
-          else
-            echo "CCXT_CRYPTO_COM_SECRET is NOT SET or empty"
-          fi          echo "STORAGE__TYPE is: $STORAGE__TYPE"
-          echo "STORAGE_LOCAL_ROOT_PATH is: $STORAGE_LOCAL_ROOT_PATH"
-          echo "CCXT__DEFAULT_EXCHANGE is: $CCXT__DEFAULT_EXCHANGE"
-          echo "--- End Debugging Environment Variables ---"      
-      # 7. Run tests
+     
+      # 6. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.
