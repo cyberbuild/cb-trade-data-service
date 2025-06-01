@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
-  - pip     
+  - pip     # Ensure pip is installed by Conda
   - pandas
   - numpy
   - pydantic
@@ -21,4 +21,6 @@ dependencies:
   - aiofiles
   - python-dotenv
   - pip:
-    - ccxt  
+    - ccxt  # Install ccxt using pip
+    - flake8 # Added linter
+    - black  # Added formatter
