@@ -11,8 +11,10 @@ from typing import Dict, Any, Generator
 from storage.backends.istorage_backend import IStorageBackend
 from storage.readerwriter.delta import DeltaReaderWriter
 from storage.storage_settings import StorageSettings
-from storage.path_strategy import OHLCVPathStrategy
+from storage.path_strategy import OHLCVPathStrategy, IStoragePathStrategy # Added IStoragePathStrategy
 from tests.helpers.storage.data_utils import generate_test_data # Reusing helper
+from tests.helpers.path_test_strategy import OHLCVTestPathStrategy # Added import
+from storage.backends.azure_blob_backend import AzureBlobBackend # Added import
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +32,15 @@ def storage_backend(request) -> Generator[IStorageBackend, None, None]:
     # Cleanup is handled by the original backend fixtures in root conftest
 
 @pytest.fixture(scope='function')
-def path_strategy() -> OHLCVPathStrategy:
-    """Provides a path strategy for generating proper paths from context."""
-    return OHLCVPathStrategy()
+def path_strategy(storage_backend: IStorageBackend) -> IStoragePathStrategy:
+    """
+    Provides a path strategy. Uses OHLCVTestPathStrategy for Azure backend
+    to ensure test isolation with prefixed paths.
+    """
+    if isinstance(storage_backend, AzureBlobBackend):
+        return OHLCVTestPathStrategy()
+    else: # For LocalFileBackend or any other
+        return OHLCVPathStrategy()
 
 @pytest.fixture(scope='function')
 def delta_reader_writer(storage_backend: IStorageBackend) -> DeltaReaderWriter:
@@ -57,10 +65,14 @@ def sample_data() -> pa.Table:
 @pytest.fixture(scope='function')
 def test_context() -> Dict[str, Any]:
     """Provides a sample context dictionary, simulating StorageManager context."""
+    from config import get_settings
+    settings = get_settings()
+    real_exchange = settings.ccxt.default_exchange
+    
     # Use unique run ID to avoid collisions between parallel tests if ever run
     run_id = uuid.uuid4()
     return {
-        'exchange': 'test_exchange',
+        'exchange': real_exchange,
         'coin': 'TEST/USD',
         'interval': '1h', # Required by OHLCVPathStrategy
         'data_type': f'test_ohlcv_{run_id}', # Unique data type for isolation
@@ -88,7 +100,6 @@ def storage_settings(test_context: Dict[str, Any]) -> StorageSettings:
 @pytest.mark.asyncio
 async def test_delta_write_read(
     delta_reader_writer: DeltaReaderWriter,
-    path_strategy: OHLCVPathStrategy,
     sample_data: pa.Table,
     storage_settings: StorageSettings,
     test_context: Dict[str, Any]
@@ -104,6 +115,11 @@ async def test_delta_write_read(
     # --- Write ---
     logger.info(f'[{backend_type}] Writing sample data...')
     
+    if backend_type == "azure":
+        path_strategy = OHLCVTestPathStrategy()
+    else:
+        path_strategy = OHLCVPathStrategy()
+
     # Generate proper path using strategy
     relative_path = path_strategy.generate_base_path(test_context)
     

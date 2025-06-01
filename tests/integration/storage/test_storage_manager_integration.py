@@ -47,12 +47,11 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     day3_end = datetime(2024, 1, 3, 23, 59, 59, tzinfo=timezone.utc)
     full_range_start = day1_start
     full_range_end = day3_end
-    freq_minutes = 60 # Use hourly data for simplicity
-
-    # 2. Fetch Initial Data (with gaps) from CCXTExchange
+    freq_minutes = 60 # Use hourly data for simplicity    # 2. Fetch Initial Data (with gaps) from CCXTExchange
     print("Fetching initial data from CCXTExchange...")
     settings = get_settings()
-    ccxt_client = CCXTExchangeClient(config=settings.ccxt, exchange_id='binance')
+    real_exchange = settings.ccxt.default_exchange
+    ccxt_client = CCXTExchangeClient(config=settings.ccxt, exchange_id=real_exchange)
     
     try:
         coin_symbol = 'BTC/USDT'
@@ -353,14 +352,13 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
 @pytest.mark.integration # Mark as integration test
 @pytest.mark.asyncio # Mark test as async
 async def test_storage_manager_integration_flow(storage_manager: IStorageManager):
-    """
-    Runs the core storage manager test flow using the parameterized
-    storage_manager fixture from conftest.py (covers both local and Azure backends).
-    """
+    
+    exchange = os.environ.get("CCXT__DEFAULT_EXCHANGE", "cryptocom")
+    
     test_context = {
-        'data_type': 'test_ohlcv',
-        'exchange': 'test_exchange',
-        'coin': f'TEST_COIN_{uuid.uuid4().hex[:6]}',
+        'data_type': 'ohlcv',
+        'exchange': exchange,
+        'coin': 'TEST_USD',
         'interval': '5m'
     }
     # The storage_manager fixture is injected by pytest from conftest.py

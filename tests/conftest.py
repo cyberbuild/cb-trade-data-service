@@ -6,6 +6,8 @@ if src_path not in sys.path:    sys.path.insert(0, src_path)
 
 import pytest
 import pytest_asyncio
+import datetime
+
 from dotenv import load_dotenv
 import shutil
 import asyncio
@@ -36,7 +38,8 @@ from storage.path_strategy import OHLCVPathStrategy
 from storage.storage_manager import OHLCVStorageManager
 from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
 from config import get_settings
-import datetime
+from tests.helpers.path_test_strategy import OHLCVTestPathStrategy
+
 
 # Set SelectorEventLoopPolicy for Windows to fix aiodns/aiohttp/azure async issues
 if sys.platform == "win32":
@@ -96,7 +99,7 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
                 time.sleep(0.5) # Wait briefly before retrying
 
 @pytest.fixture(scope="function")
-async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixture
+async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
     """Fixture for AzureBlobBackend using service principal authentication."""
     account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME")
     use_managed_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "false").lower() == "true"
@@ -104,18 +107,14 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixt
 
     # Validate service principal authentication configuration
     if not (account_name and use_managed_identity):
-        pytest.skip("Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")
-
-
-    # Use a fixed container, but a unique prefix for test isolation
+        pytest.skip("Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")    # Generate test prefix for isolation
     test_prefix = f"test-{uuid.uuid4().hex[:8]}"
     print(f"Using Azure test container: {base_container_name}, test prefix: {test_prefix}")
-
+    
     backend = AzureBlobBackend(
         account_name=account_name,
         container_name=base_container_name,
-        use_managed_identity=True,
-        prefix=test_prefix
+        use_managed_identity=True
     )
 
     from azure.identity import DefaultAzureCredential
@@ -152,15 +151,21 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixt
 # --- Parameterized StorageManager Fixture ---
 
 @pytest.fixture(params=["local", "azure"], scope="function")
-async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerator[IStorageManager[IExchangeRecord], None]: # Correct type hint for async generator
+async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerator[IStorageManager[IExchangeRecord], None]:
     """Fixture providing a StorageManager configured with either local or azure backend."""
-    # Use OHLCVStorageManager with DeltaReaderWriter, OHLCVPathStrategy, and YearMonthDayPartitionStrategy
+        # Use OHLCVStorageManager with DeltaReaderWriter, OHLCVPathStrategy, and YearMonthDayPartitionStrategy    
     def make_strategy_kwargs(backend):
+        if request.param == "azure":
+            path_strategy = OHLCVTestPathStrategy()
+        else:
+            path_strategy = OHLCVPathStrategy()
+            
         return {
             'writer': DeltaReaderWriter(backend),
-            'path_strategy': OHLCVPathStrategy(),
+            'path_strategy': path_strategy,
             'partition_strategy': YearMonthDayPartitionStrategy()
         }
+        
     if request.param == "local":
         print("Configuring OHLCVStorageManager with Local Backend")        
         manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
@@ -219,24 +224,21 @@ def check_no_data_dirs_after_tests():
 logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="function")
-async def setup_historical_data(storage_manager) -> AsyncGenerator[dict, None]:
+async def fetch_historical_data(storage_manager) -> dict:
     """
-    Fetches recent historical data using CCXT and saves it using the storage_manager.
-    This fixture runs before tests that require pre-populated data.
-    It fetches 1 hour of 1m BTC/USD data from cryptocom.
+    Fetches recent historical data using CCXT without saving it.
     """
-
     settings = get_settings()
-    ccxt_client = CCXTExchangeClient(exchange_id='cryptocom', config=settings.ccxt)
-    context = {'exchange': 'cryptocom', 'coin': 'BTC/USD', 'data_type': 'ohlcv', 'interval': '1m'}
+    real_exchange = settings.ccxt.default_exchange
+    ccxt_client = CCXTExchangeClient(exchange_id=real_exchange, config=settings.ccxt)
+    context = {'exchange': real_exchange, 'coin': 'BTC/USD', 'data_type': 'ohlcv', 'interval': '1m'}
     interval = '1m'
     fetch_duration_hours = 1
 
     end_time = datetime.datetime.now(datetime.timezone.utc)
     start_time = end_time - datetime.timedelta(hours=fetch_duration_hours)
 
-    logger.info(f"Setup: Fetching data for {context['coin']} from {start_time} to {end_time}")
+    logger.info(f"Fetching data for {context['coin']} from {start_time} to {end_time}")
     try:
         exchange_data = await ccxt_client.fetch_ohlcv_data(
             coin_symbol=context['coin'],
@@ -244,20 +246,32 @@ async def setup_historical_data(storage_manager) -> AsyncGenerator[dict, None]:
             end_time=end_time,
             interval=interval
         )
-        
+
         if exchange_data.data:
-            logger.info(f"Setup: Fetched {len(exchange_data.data)} records.")
-            
-            await storage_manager.save_entry(exchange_data)
-            logger.info(f"Setup: Saved {len(exchange_data.data)} records to storage.")
-            yield context
+            logger.info(f"Fetched {len(exchange_data.data)} records.")
         else:
-            logger.warning("Setup: No data fetched from exchange.")
-            yield context
+            logger.warning("No data fetched from exchange.")
+
+        return {'context': context, 'data': exchange_data}
 
     except Exception as e:
-        logger.error(f"Setup: Error during data fetching/saving: {e}", exc_info=True)
-        pytest.fail(f"Failed to set up historical data: {e}")
+        logger.error(f"Error during data fetching: {e}", exc_info=True)
+        pytest.fail(f"Failed to fetch historical data: {e}")
     finally:
         await ccxt_client.close()
-        logger.info("Setup: Closed CCXT client.")
+        logger.info("Closed CCXT client.")
+
+@pytest.fixture(scope="function")
+async def setup_historical_data(storage_manager) -> AsyncGenerator[dict, None]:
+    """
+    Fetches and saves recent historical data using CCXT and the storage_manager.
+    """
+    result = await fetch_historical_data(storage_manager)
+    context = result['context']
+    exchange_data = result['data']
+
+    if exchange_data.data:
+        await storage_manager.save_entry(exchange_data)
+        logger.info(f"Saved {len(exchange_data.data)} records to storage.")
+
+    yield context
