@@ -45,16 +45,11 @@ jobs:
           auto-activate-base: false # We want to activate the environment from the file
           use-mamba: true # Use Mamba for faster and potentially more robust dependency resolution
 
-      # 3. Install build tools (if not already in environment.yml)
-      # Best practice: include pip, build, pytest, wheel in environment.yml dependencies.
-      - name: Install build and test tools (if needed)
-        # Ensures conda environment is activated for this step
-        shell: bash
+      - name: Install/Update Conda environment including pip dependencies
+        shell: bash -l {0}
         run: |
-          echo "Ensuring build tools are present. Best practice: include them in environment.yml."
-          # If 'pip', 'build', 'pytest', 'wheel' are in environment.yml, this step might be mainly for confirmation.
-          # Example: conda install --name cb-trade --yes pip build pytest wheel
-          # This command assumes the environment name is 'cb-trade'.
+          conda activate cb-trade
+          conda env create --name cb-trade --file environment.yml --prune
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Example using Flake8 and Black. Adapt to your project's tools.
