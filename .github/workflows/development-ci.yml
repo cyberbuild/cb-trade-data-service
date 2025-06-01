@@ -34,25 +34,33 @@ jobs:
           fetch-depth: 0
 
       # 2. Set up Conda environment
-      # IMPORTANT: Your project's environment.yml should define the environment name as 'build'
-      # e.g., in environment.yml:
-      # name: build
+      # The action will use the 'name' field from environment.yml to name and activate the environment.
+      # Ensure your environment.yml has a 'name' field (e.g., name: build).
       - name: Set up Conda environment
         uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: build # Generic environment name
+          # activate-environment: build # REMOVED - Name will be taken from environment.yml
           environment-file: environment.yml # Path to your conda environment file
-          python-version: '3.10' # Optional: Specify Python version if not strictly defined in environment.yml
-          auto-activate-base: false # We want to activate our specific environment
+          python-version: '3.10' # Optional: Specify a base Python for Miniconda setup
+          auto-activate-base: false # We want to activate the environment from the file
 
       # 3. Install build tools (if not already in environment.yml)
       # These tools are needed for subsequent steps.
       # Ensure they are installed in the activated conda environment.
-      - name: Install build and test tools
+      # Replace 'build' with your actual environment name if it's different and you were previously relying on activate-environment.
+      # However, if environment.yml's name is used, this step assumes it's known (e.g., 'build' if that's in the YAML)
+      # or you might need a step to extract it if the name is dynamic and used in conda install commands.
+      # For simplicity, this example assumes 'build' is the name in environment.yml.
+      # If the name from environment.yml is used, this install command might need to dynamically get that name
+      # or ensure tools are listed within environment.yml itself.
+      # A common practice is to ensure all necessary tools like pip, build, pytest, wheel are in environment.yml.
+      - name: Install build and test tools (if needed)
         shell: bash -l # Ensures conda environment is activated for this step
         run: |
-          conda install --name build --yes pip build pytest wheel # Or add these to your environment.yml
-          # If your environment.yml already includes pip, build, pytest, wheel, you might not need this explicit install.
+          echo "Ensuring build tools are present. Best practice: include them in environment.yml."
+          # Example: If your environment.yml is named 'build' and includes these, this might be redundant.
+          # conda install --name $(grep '^name:' environment.yml | cut -d ' ' -f 2) --yes pip build pytest wheel
+          # For robustness, prefer adding pip, build, pytest, wheel to your environment.yml dependencies.
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Example using Flake8 and Black. Adapt to your project's tools.
@@ -60,9 +68,7 @@ jobs:
       - name: Lint and Format Check
         shell: bash -l # Ensures conda environment is activated
         run: |
-          # Ensure linters are installed in the conda env, either via environment.yml or here
-          # conda install --name build --yes flake8 black
-          # Or if already installed via environment.yml:
+          # Ensure linters are installed in the conda env, (e.g., via environment.yml)
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           black --check .
 
@@ -80,8 +86,6 @@ jobs:
         run: python -m build
 
       # 7. Publish to GitHub Packages (only on direct push to development)
-      # This step runs only when the event is a push to the 'development' branch,
-      # indicating a merge has occurred.
       - name: Publish package to GitHub Packages
         if: github.event_name == 'push' && github.ref == 'refs/heads/development'
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -91,17 +95,15 @@ jobs:
           repository_url: https://pypi.pkg.github.com/YOUR_USERNAME_OR_ORG/ # IMPORTANT: Replace with your GitHub username or organization
 
       # 8. Create Pull Request from development to master (only on direct push to development)
-      # This step also runs only when the event is a push to the 'development' branch,
-      # and implies all previous steps were successful.
       - name: Create Pull Request to master
         if: github.event_name == 'push' && github.ref == 'refs/heads/development'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }} # Uses the default GITHUB_TOKEN
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Auto-PR: Merge development into master after successful CI"
           branch: auto-pr/development-to-master
-          base: master # The branch to target with the PR
-          head: development # The branch to merge from (the current state of development)
+          base: master
+          head: development
           title: 'Auto-PR: Merge `development` into `master`'
           body: |
             Automated Pull Request
@@ -110,6 +112,6 @@ jobs:
 
             Triggered by commit: ${{ github.sha }}
           labels: automated pr, development-merge
-          # assignees: your-github-username # Optional: assign someone to review
-          # reviewers: your-github-username,another-reviewer # Optional: request reviews
-          # draft: false # Set to true to create a draft PR
+          # assignees: your-github-username
+          # reviewers: your-github-username,another-reviewer
+          # draft: false
