@@ -133,7 +133,7 @@ jobs:
         env:
           # Secrets (ensure these are created in GitHub Repository Settings > Secrets and variables > Actions)
           STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
-          STORAGE__AZURE__CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
           CCXT_CRYPTO_COM_API_KEY: ${{ secrets.CCXT_CRYPTO_COM_API_KEY }} # Only if your tests use this
           CCXT_CRYPTO_COM_SECRET: ${{ secrets.CCXT_CRYPTO_COM_SECRET }}   # Only if your tests use this
 
