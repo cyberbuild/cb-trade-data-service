@@ -49,7 +49,7 @@ jobs:
       # These tools are needed for subsequent steps.
       # Ensure they are installed in the activated conda environment.
       - name: Install build and test tools
-        shell: bash -l {0} # Ensures conda environment is activated for this step
+        shell: bash -l # Ensures conda environment is activated for this step
         run: |
           conda install --name build --yes pip build pytest wheel # Or add these to your environment.yml
           # If your environment.yml already includes pip, build, pytest, wheel, you might not need this explicit install.
