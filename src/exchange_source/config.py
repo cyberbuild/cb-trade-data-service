@@ -7,7 +7,8 @@ from typing import Optional
 
 
 class CCXTConfig(BaseModel):
-    """Configuration specific to the CCXT library and exchanges."""    
+    """Configuration specific to the CCXT library and exchanges."""
+
     default_exchange: Optional[str] = Field(
         None, description="Default exchange ID to use if not specified"
     )
@@ -31,7 +32,8 @@ class CCXTConfig(BaseModel):
         """Return the exchange ID, using default_exchange if use_default_exchange is True"""
         if self.use_default_exchange:
             return self.default_exchange
-        return None    # Use model_config with ConfigDict instead of nested class Config
+        return None  # Use model_config with ConfigDict instead of nested class Config
+
     model_config = SettingsConfigDict(
         # Remove env_prefix since this is a nested config
         # The parent config will handle environment variable mapping
