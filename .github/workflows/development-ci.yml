@@ -138,7 +138,8 @@ jobs:
           fi          echo "STORAGE__TYPE is: $STORAGE__TYPE"
           echo "STORAGE_LOCAL_ROOT_PATH is: $STORAGE_LOCAL_ROOT_PATH"
           echo "CCXT__DEFAULT_EXCHANGE is: $CCXT__DEFAULT_EXCHANGE"
-          echo "--- End Debugging Environment Variables ---"      # 7. Run tests
+          echo "--- End Debugging Environment Variables ---"      
+      # 7. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.
