@@ -51,7 +51,8 @@ jobs:
       # Best practice: include build, pytest, wheel in environment.yml dependencies (conda or pip section).
       # This step now primarily serves as a check or installs if truly missing.
       - name: Install package in editable mode and ensure tools
-        shell: bash
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
         run: |
           echo "Verifying presence of build and test tools (build, wheel, pytest)."
           echo "These should be installed from environment.yml by the 'Set up Conda environment' step."
@@ -61,16 +62,31 @@ jobs:
           echo "Upgrading pydantic-settings..."
           python -m pip install --upgrade pydantic-settings
 
+      # 4. (Optional but Recommended) Lint and Format Check
+      # Flake8 and Black should be installed from environment.yml's pip section by Step 2.
+      # Flake8 will use the .flake8 configuration file in the project root.
+      - name: Lint and Format Check
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
+        run: |
+          echo "Running linters and format checkers. Flake8 and Black should be installed via environment.yml."
+          flake8 . # Runs flake8, using .flake8 config file if present
+          black --check .
+
       # 5. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.
       - name: Run tests with Pytest
-        shell: bash
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
         env:
           # Secrets (ensure these are created in GitHub Repository Settings > Secrets and variables > Actions)
           STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
           STORAGE__AZURE__CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          CCXT_CRYPTO_COM_API_KEY: ${{ secrets.CCXT_CRYPTO_COM_API_KEY }} # Only if your tests use this
+          CCXT_CRYPTO_COM_SECRET: ${{ secrets.CCXT_CRYPTO_COM_SECRET }}   # Only if your tests use this
+
           # Non-sensitive configurations from your .env.test file
           STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data # Relative path for local testing within the repo
@@ -80,7 +96,8 @@ jobs:
       # 6. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
       - name: Build package
-        shell: bash
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
         run: python -m build
 
       # 7. Publish to GitHub Packages (only on direct push to development)
