@@ -22,10 +22,11 @@ dependencies:
   - aiofiles
   - python-dotenv
   - pyarrow
-  - deltalake  
+  - deltalake    
   - pip:
     - ccxt  # Install ccxt using pip
     - flake8 # Added linter
     - black  # Added formatter
     - build  # Build tools for packaging
     - wheel  # Build tools for packaging
+    - azure-identity  # Required for Azure managed identity authentication
