@@ -228,33 +228,12 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="function")
-async def setup_historical_data(request, local_backend, azure_backend) -> AsyncGenerator[dict, None]:
+async def setup_historical_data(storage_manager) -> AsyncGenerator[dict, None]:
     """
     Fetches recent historical data using CCXT and saves it using the storage_manager.
     This fixture runs before tests that require pre-populated data.
     It fetches 1 hour of 1m BTC/USD data from cryptocom.
-    """    
-    # Create storage manager based on the parameter
-    def make_strategy_kwargs(backend):
-        return {
-            'writer': DeltaReaderWriter(backend),
-            'path_strategy': OHLCVPathStrategy(),
-            'partition_strategy': YearMonthDayPartitionStrategy()
-        }
-    
-    if request.param == "local":
-        storage_manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
-    elif request.param == "azure":
-        # Check for service principal authentication configuration
-        account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME")
-        use_managed_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "false").lower() == "true"
-        
-        if not (account_name and use_managed_identity):
-            pytest.skip("Skipping Azure test: Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")
-        
-        storage_manager = OHLCVStorageManager(backend=azure_backend, **make_strategy_kwargs(azure_backend))
-    else:
-        raise ValueError(f"Unknown backend type requested: {request.param}")
+    """
 
     settings = get_settings()
     ccxt_client = CCXTExchangeClient(exchange_id='cryptocom', config=settings.ccxt)
