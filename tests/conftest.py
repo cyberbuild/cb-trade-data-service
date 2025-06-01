@@ -106,57 +106,43 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixt
     if not (account_name and use_managed_identity):
         pytest.skip("Service principal authentication requires STORAGE_AZURE_ACCOUNT_NAME and STORAGE_AZURE_USE_MANAGED_IDENTITY=true")
 
-    # Generate a unique container name for this specific test function execution
-    unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
 
-    print(f"Using service principal authentication with unique Azure test container: {unique_container_name}")
-    
-    # Create backend with service principal authentication
+    # Use a fixed container, but a unique prefix for test isolation
+    test_prefix = f"test-{uuid.uuid4().hex[:8]}"
+    print(f"Using Azure test container: {base_container_name}, test prefix: {test_prefix}")
+
     backend = AzureBlobBackend(
-        account_name=account_name, 
-        container_name=unique_container_name, 
-        use_managed_identity=True
+        account_name=account_name,
+        container_name=base_container_name,
+        use_managed_identity=True,
+        prefix=test_prefix
     )
-    
-    # Use DefaultAzureCredential for service principal authentication
+
     from azure.identity import DefaultAzureCredential
     credential = DefaultAzureCredential()
     account_url = f"https://{account_name}.blob.core.windows.net"
     blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
-    container_created = False
+    container_client = blob_service_client.get_container_client(base_container_name)
     try:
-        # Create container asynchronously
+        # Ensure the container exists
         try:
-            await blob_service_client.create_container(unique_container_name)
-            container_created = True
-            print(f"Created test container: {unique_container_name}")
+            await container_client.create_container()
+            print(f"Created test container: {base_container_name}")
         except Exception as e:
-            # Catch specific exception if possible (e.g., ResourceExistsError)
-            # If it already exists (unlikely with UUID), log warning but proceed
-            print(f"Warning: Could not create container {unique_container_name} (may already exist?): {e}")
-            # Decide if this should be a failure or just a warning
-            # If creation MUST succeed, re-raise or pytest.fail()
+            print(f"Container {base_container_name} may already exist: {e}")
 
-        yield backend # Provide the backend instance to the test
+        yield backend
 
     finally:
-        # Teardown: Delete the test container asynchronously with timeout protection
+        # Teardown: Delete all blobs under the test prefix, not the container
         try:
-            print(f"Attempting to delete test container: {unique_container_name}")
-            # Add timeout protection for cleanup operations
-            async def cleanup_with_timeout():
-                await asyncio.sleep(1)  # Brief delay for consistency
-                await blob_service_client.delete_container(unique_container_name)
-                await blob_service_client.close()
-            
-            await asyncio.wait_for(cleanup_with_timeout(), timeout=30.0)
-            print(f"Deleted test container: {unique_container_name}")
-        except asyncio.TimeoutError:
-            print(f"Warning: Timeout during cleanup of test container {unique_container_name}")
+            print(f"Cleaning up blobs with prefix: {test_prefix}")
+            async for blob in container_client.list_blobs(name_starts_with=test_prefix):
+                await container_client.delete_blob(blob.name)
+            await blob_service_client.close()
         except Exception as e:
-            print(f"Warning: Failed to delete test container {unique_container_name}: {e}")
+            print(f"Warning: Failed to clean up blobs in container {base_container_name}: {e}")
         finally:
-            # Force close the client if still open
             try:
                 await blob_service_client.close()
             except:
