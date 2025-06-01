@@ -90,7 +90,7 @@ jobs:
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
           STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-            STORAGE__TYPE: local
+          STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data
           CCXT__DEFAULT_EXCHANGE: cryptocom
         run: |
