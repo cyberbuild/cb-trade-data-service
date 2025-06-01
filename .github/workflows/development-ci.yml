@@ -34,33 +34,24 @@ jobs:
           fetch-depth: 0
 
       # 2. Set up Conda environment
-      # The action will use the 'name' field from environment.yml to name and activate the environment.
-      # Ensure your environment.yml has a 'name' field (e.g., name: build).
+      # Ensure your environment.yml has 'name: cb-trade' and 'python=3.9'.
       - name: Set up Conda environment
         uses: conda-incubator/setup-miniconda@v3
         with:
-          # activate-environment: build # REMOVED - Name will be taken from environment.yml
+          activate-environment: cb-trade # Explicitly set to match environment.yml name
           environment-file: environment.yml # Path to your conda environment file
-          python-version: '3.10' # Optional: Specify a base Python for Miniconda setup
+          python-version: '3.9' # Align with python=3.9 in environment.yml
           auto-activate-base: false # We want to activate the environment from the file
 
       # 3. Install build tools (if not already in environment.yml)
-      # These tools are needed for subsequent steps.
-      # Ensure they are installed in the activated conda environment.
-      # Replace 'build' with your actual environment name if it's different and you were previously relying on activate-environment.
-      # However, if environment.yml's name is used, this step assumes it's known (e.g., 'build' if that's in the YAML)
-      # or you might need a step to extract it if the name is dynamic and used in conda install commands.
-      # For simplicity, this example assumes 'build' is the name in environment.yml.
-      # If the name from environment.yml is used, this install command might need to dynamically get that name
-      # or ensure tools are listed within environment.yml itself.
-      # A common practice is to ensure all necessary tools like pip, build, pytest, wheel are in environment.yml.
+      # Best practice: include pip, build, pytest, wheel in environment.yml dependencies.
       - name: Install build and test tools (if needed)
         shell: bash -l # Ensures conda environment is activated for this step
         run: |
           echo "Ensuring build tools are present. Best practice: include them in environment.yml."
-          # Example: If your environment.yml is named 'build' and includes these, this might be redundant.
-          # conda install --name $(grep '^name:' environment.yml | cut -d ' ' -f 2) --yes pip build pytest wheel
-          # For robustness, prefer adding pip, build, pytest, wheel to your environment.yml dependencies.
+          # If 'pip', 'build', 'pytest', 'wheel' are in environment.yml, this step might be mainly for confirmation.
+          # Example: conda install --name cb-trade --yes pip build pytest wheel
+          # This command assumes the environment name is 'cb-trade'.
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Example using Flake8 and Black. Adapt to your project's tools.
@@ -68,7 +59,7 @@ jobs:
       - name: Lint and Format Check
         shell: bash -l # Ensures conda environment is activated
         run: |
-          # Ensure linters are installed in the conda env, (e.g., via environment.yml)
+          # Ensure linters are installed in the conda env (e.g., via environment.yml)
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           black --check .
 
