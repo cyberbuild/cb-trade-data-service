@@ -47,14 +47,14 @@ jobs:
           auto-activate-base: false # We want to activate the environment from the file
           use-mamba: true # Use Mamba for faster and potentially more robust dependency resolution
 
-      # 3. Install package and ensure build/test tools
+      # 3. Install/Verify build tools (if not already in environment.yml)
+      # Best practice: include build, pytest, wheel in environment.yml dependencies (conda or pip section).
+      # This step now primarily serves as a check or installs if truly missing.
       - name: Install package in editable mode and ensure tools
         shell: bash
         run: |
           echo "Verifying presence of build and test tools (build, wheel, pytest)."
           echo "These should be installed from environment.yml by the 'Set up Conda environment' step."
-          # If any are consistently missing, consider adding them explicitly to environment.yml's
-          # conda dependencies or its pip section.
           python -m pip install build wheel
           echo "Installing the current package in editable mode..."
           python -m pip install -e .
@@ -73,20 +73,18 @@ jobs:
 
       # 5. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
-      # Environment variables for tests are passed via the 'env' context using GitHub secrets.
+      # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
+      # and direct assignment for non-sensitive configurations.
       - name: Run tests with Pytest
         shell: bash
         env:
-          # Variables from your .env.test file
           # Secrets (ensure these are created in GitHub Repository Settings > Secrets and variables > Actions)
           STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
-          STORAGE__AZURE__CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }} # Or set directly if not sensitive for CI tests
-          CCXT_CRYPTO_COM_API_KEY: ${{ secrets.CCXT_CRYPTO_COM_API_KEY }} # Only if your tests use this
-          CCXT_CRYPTO_COM_SECRET: ${{ secrets.CCXT_CRYPTO_COM_SECRET }}   # Only if your tests use this
-
-          # Non-sensitive configurations (can be set directly or as secrets if preferred)
-          STORAGE__TYPE: local # Or ${{ secrets.STORAGE_TYPE_FOR_TESTS }} if it needs to be configurable
-          CCXT_DEFAULT_EXCHANGE: cryptocom # Or ${{ secrets.CCXT_DEFAULT_EXCHANGE_FOR_TESTS }}
+          STORAGE__AZURE__CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          # Non-sensitive configurations from your .env.test file
+          STORAGE__TYPE: local
+          STORAGE_LOCAL_ROOT_PATH: ./test_data # Relative path for local testing within the repo
+          CCXT_DEFAULT_EXCHANGE: cryptocom
         run: pytest
 
       # 6. Build package
