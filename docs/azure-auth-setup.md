@@ -75,9 +75,21 @@ rm fedcred.json
 # PowerShell - WORKING Method: Use JSON file with @ prefix
 @'
 {
+ "name": "github-pr-credential",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:cyberbuild/cb-trade-data-service:pull_request",
+  "audiences": ["api://AzureADTokenExchange"]
+
+}
+'@ | Out-File -FilePath fedcred.json -Encoding utf8
+az ad app federated-credential create --id $APP_ID --parameters '@fedcred.json'
+Remove-Item fedcred.json
+
+@'
+{
   "name": "cb-trade-all-branches",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:your-org/cb-trade-data-service:ref:refs/heads/*", 
+  "subject": "repo:cyberbuild/cb-trade-data-service:ref:refs/heads/*", 
   "audiences": ["api://AzureADTokenExchange"]
 }
 '@ | Out-File -FilePath fedcred.json -Encoding utf8

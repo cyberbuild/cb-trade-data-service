@@ -90,10 +90,9 @@ jobs:
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
           STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-          
-          STORAGE_TYPE: local
+            STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data
-          CCXT_DEFAULT_EXCHANGE: cryptocom
+          CCXT__DEFAULT_EXCHANGE: cryptocom
         run: |
           echo "--- Debugging Environment Variables ---"
           echo "Checking for STORAGE_AZURE_ACCOUNT_NAME..."
@@ -136,11 +135,9 @@ jobs:
             echo "CCXT_CRYPTO_COM_SECRET is SET (length: ${#CCXT_CRYPTO_COM_SECRET})"
           else
             echo "CCXT_CRYPTO_COM_SECRET is NOT SET or empty"
-          fi
-
-          echo "STORAGE__TYPE is: $STORAGE__TYPE"
+          fi          echo "STORAGE__TYPE is: $STORAGE__TYPE"
           echo "STORAGE_LOCAL_ROOT_PATH is: $STORAGE_LOCAL_ROOT_PATH"
-          echo "CCXT_DEFAULT_EXCHANGE is: $CCXT_DEFAULT_EXCHANGE"
+          echo "CCXT__DEFAULT_EXCHANGE is: $CCXT__DEFAULT_EXCHANGE"
           echo "--- End Debugging Environment Variables ---"      # 7. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
@@ -161,7 +158,7 @@ jobs:
           # Non-sensitive configurations from your .env.test file
           STORAGE__TYPE: local
           STORAGE_LOCAL_ROOT_PATH: ./test_data # Relative path for local testing within the repo
-          CCXT_DEFAULT_EXCHANGE: cryptocom
+          CCXT__DEFAULT_EXCHANGE: cryptocom
         run: pytest --tb=long
 
       # 8. Build package
