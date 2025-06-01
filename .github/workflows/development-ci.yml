@@ -22,8 +22,8 @@ jobs:
   build-test-publish-and-pr:
     name: Build, Test, Publish & Create PR
     runs-on: ubuntu-latest # Specifies the type of runner the job will run on
-    # This job will run on pushes to 'development' or on PRs targeting 'development'.
-    # Specific steps for publishing and creating PRs will have additional conditions.
+    env: # Set environment variables for all steps in this job
+      PYTHON DONTWRITEBYTECODE: '1' # Prevents Python from writing .pyc files
 
     steps:
       # 1. Checkout your repository code
@@ -31,54 +31,52 @@ jobs:
         uses: actions/checkout@v4
         with:
           # Fetches all history for all branches and tags.
-          # Important for 'create-pull-request' action to correctly determine changes
-          # if you are creating PR from 'development' to 'master'.
           fetch-depth: 0
 
       # 2. Set up Conda environment
-      # This step replaces the direct setup-python and pip install for dependencies
+      # IMPORTANT: Your project's environment.yml should define the environment name as 'build'
+      # e.g., in environment.yml:
+      # name: build
       - name: Set up Conda environment
-        uses: conda-incubator/setup-miniconda@v3 # Use a dedicated action to set up Conda
+        uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: build # Name of the conda environment to create/activate
+          activate-environment: build # Generic environment name
           environment-file: environment.yml # Path to your conda environment file
-          python-version: '3.11' # Optional: Specify Python version if not strictly defined in environment.yml
+          python-version: '3.10' # Optional: Specify Python version if not strictly defined in environment.yml
           auto-activate-base: false # We want to activate our specific environment
 
       # 3. Install build tools (if not already in environment.yml)
       # These tools are needed for subsequent steps.
       # Ensure they are installed in the activated conda environment.
       - name: Install build and test tools
-        shell: bash -l {0} # Ensures conda environment is activated for this step
+        shell: bash -l # Ensures conda environment is activated for this step
         run: |
           conda install --name build --yes pip build pytest wheel # Or add these to your environment.yml
           # If your environment.yml already includes pip, build, pytest, wheel, you might not need this explicit install.
-          # Verify they are installed in the 'build' environment.
 
       # 4. (Optional but Recommended) Lint and Format Check
       # Example using Flake8 and Black. Adapt to your project's tools.
       # Ensure these are run within the conda environment.
       - name: Lint and Format Check
-        shell: bash -l {0} # Ensures conda environment is activated
+        shell: bash -l # Ensures conda environment is activated
         run: |
           # Ensure linters are installed in the conda env, either via environment.yml or here
           # conda install --name build --yes flake8 black
           # Or if already installed via environment.yml:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           black --check .
-        # continue-on-error: true
 
       # 5. Run tests
       # Assumes tests are run with pytest, using the conda environment's Python.
       - name: Run tests with Pytest
-        shell: bash -l {0} # Ensures conda environment is activated
+        shell: bash -l # Ensures conda environment is activated
         run: pytest
 
       # 6. Build package
       # This step uses the 'build' package, which requires a pyproject.toml.
       # It should use the Python from the activated conda environment.
       - name: Build package
-        shell: bash -l {0} # Ensures conda environment is activated
+        shell: bash -l # Ensures conda environment is activated
         run: python -m build
 
       # 7. Publish to GitHub Packages (only on direct push to development)
@@ -90,8 +88,7 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.GITHUB_TOKEN }}
-          repository_url: https://pypi.pkg.github.com/cyberbuild/ # IMPORTANT: Replace with your GitHub username or organization
-          # Make sure your setup.py or pyproject.toml generates a unique version for each publish.
+          repository_url: https://pypi.pkg.github.com/YOUR_USERNAME_OR_ORG/ # IMPORTANT: Replace with your GitHub username or organization
 
       # 8. Create Pull Request from development to master (only on direct push to development)
       # This step also runs only when the event is a push to the 'development' branch,
