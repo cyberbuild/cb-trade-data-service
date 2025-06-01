@@ -60,7 +60,7 @@ def load_test_env():
 @pytest.fixture(scope="function")
 def local_backend() -> Generator[IStorageBackend, None, None]:
     """Fixture for LocalFileBackend using settings from .env.test, cleans up afterwards."""
-    root_path_str = os.environ.get("STORAGE__LOCAL__ROOT_PATH", "./test_data_fallback")
+    root_path_str = os.environ.get("STORAGE_LOCAL_ROOT_PATH", "./test_data_fallback")
     # Resolve the path relative to the project root if it's relative
     local_test_root_dir = Path(root_path_str)
     if not local_test_root_dir.is_absolute():
@@ -98,11 +98,11 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
 @pytest.fixture(scope="function")
 async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixture
     """Fixture for AzureBlobBackend using settings from .env.test, manages container lifecycle with unique names."""
-    connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
-    base_container_name = os.environ.get("STORAGE__AZURE__CONTAINER_NAME", "test-container-fallback")
+    connection_string = os.environ.get("STORAGE_AZURE_CONNECTION_STRING")
+    base_container_name = os.environ.get("STORAGE_AZURE_CONTAINER_NAME", "test-container-fallback")
 
     if not connection_string:
-        pytest.skip("STORAGE__AZURE__CONNECTION_STRING environment variable not set.")
+        pytest.skip("STORAGE_AZURE_CONNECTION_STRING environment variable not set.")
 
     # Generate a unique container name for this specific test function execution
     unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
@@ -159,12 +159,12 @@ async def storage_manager(request, local_backend, azure_backend) -> AsyncGenerat
             'partition_strategy': YearMonthDayPartitionStrategy()
         }
     if request.param == "local":
-        print("Configuring OHLCVStorageManager with Local Backend")
+        print("Configuring OHLCVStorageManager with Local Backend")        
         manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
         yield manager
 
     elif request.param == "azure":
-        connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
+        connection_string = os.environ.get("STORAGE_AZURE_CONNECTION_STRING")
         if not connection_string:
             pytest.skip("Skipping Azure test as connection string is not set.")
         print("Configuring OHLCVStorageManager with Azure Backend")
@@ -231,7 +231,7 @@ async def setup_historical_data(request, local_backend, azure_backend) -> AsyncG
     if request.param == "local":
         storage_manager = OHLCVStorageManager(backend=local_backend, **make_strategy_kwargs(local_backend))
     elif request.param == "azure":
-        connection_string = os.environ.get("STORAGE__AZURE__CONNECTION_STRING")
+        connection_string = os.environ.get("STORAGE_AZURE_CONNECTION_STRING")
         if not connection_string:
             pytest.skip("Skipping Azure test as connection string is not set.")
         storage_manager = OHLCVStorageManager(backend=azure_backend, **make_strategy_kwargs(azure_backend))
