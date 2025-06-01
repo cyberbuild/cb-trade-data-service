@@ -39,36 +39,17 @@ jobs:
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # 3. Set up Conda environment
-      # This step should install all dependencies from environment.yml,
-      # including conda packages and those listed under the 'pip:' section.
-      # Ensure your environment.yml has 'name: cb-trade', 'python=3.9',
-      # 'pip' as a conda dependency, and then ccxt, flake8, black, etc., under the 'pip:' section.
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}      # 3. Set up Conda environment with caching
       - name: Set up Conda environment
         uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: cb-trade # Explicitly set to match environment.yml name
-          environment-file: environment.yml # Path to your conda environment file
-          python-version: '3.9' # Align with python=3.9 in environment.yml
-          auto-activate-base: false # We want to activate the environment from the file
-          use-mamba: true # Use Mamba for faster and potentially more robust dependency resolution
-
-      # 4. Install/Verify build tools (if not already in environment.yml)
-      # Best practice: include build, pytest, wheel in environment.yml dependencies (conda or pip section).
-      # This step now primarily serves as a check or installs if truly missing.
-      - name: Install package in editable mode and ensure tools
-        # Ensures conda environment is activated for this step by using a login shell
-        shell: bash -l {0}
-        run: |
-          echo "Verifying presence of build and test tools (build, wheel, pytest)."
-          echo "These should be installed from environment.yml by the 'Set up Conda environment' step."
-          python -m pip install build wheel
-          echo "Installing the current package in editable mode..."
-          python -m pip install -e .
-          echo "Upgrading pydantic-settings..."
-          python -m pip install --upgrade pydantic-settings
+          activate-environment: cb-trade
+          environment-file: environment.yml
+          python-version: '3.9'
+          auto-activate-base: false
+          use-mamba: true
+          cache-environment: true
+          cache-environment-key: environment-${{ hashFiles('environment.yml') }}
 
       # 5. (Optional but Recommended) Lint and Format Check
       # Flake8 and Black should be installed from environment.yml's pip section by Step 2.
@@ -78,10 +59,46 @@ jobs:
         shell: bash -l {0}
         run: |
           echo "Running linters and format checkers. Flake8 and Black should be installed via environment.yml."
-          flake8 . --exclude tests # Exclude the tests folder from flake8
-          black --check . --exclude tests # Optionally exclude tests from black as well      # 6. Debug Environment Variables for Tests
-     
-      # 6. Run tests
+          flake8 . --exclude tests # Exclude the tests folder from flake8          black --check . --exclude tests # Optionally exclude tests from black as well
+
+      # 6. Debug Environment Variables for Tests
+      # This step helps verify if secrets and env vars are being set as expected.
+      - name: Debug Environment Variables for Tests
+        shell: bash -l {0}
+        env:
+          # Azure authentication for managed identity (GitHub OIDC)
+          STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
+          STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
+          STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          
+          STORAGE__TYPE: local
+          STORAGE_LOCAL_ROOT_PATH: ./test_data
+          CCXT__DEFAULT_EXCHANGE: cryptocom
+        run: |
+          echo "--- Debugging Environment Variables ---"
+          echo "Checking for STORAGE_AZURE_ACCOUNT_NAME..."
+          if [ -n "$STORAGE_AZURE_ACCOUNT_NAME" ]; then
+            echo "STORAGE_AZURE_ACCOUNT_NAME is SET (value: $STORAGE_AZURE_ACCOUNT_NAME)"
+          else
+            echo "STORAGE_AZURE_ACCOUNT_NAME is NOT SET"
+          fi
+
+          echo "Checking for STORAGE_AZURE_USE_MANAGED_IDENTITY..."
+          if [ -n "$STORAGE_AZURE_USE_MANAGED_IDENTITY" ]; then
+            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is SET (value: $STORAGE_AZURE_USE_MANAGED_IDENTITY)"
+          else
+            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is NOT SET"
+          fi
+
+          echo "Checking for STORAGE_AZURE_CONTAINER_NAME..."
+          if [ -n "$STORAGE_AZURE_CONTAINER_NAME" ]; then
+            echo "STORAGE_AZURE_CONTAINER_NAME is SET (value: $STORAGE_AZURE_CONTAINER_NAME)"
+          else
+            echo "STORAGE_AZURE_CONTAINER_NAME is NOT SET"
+          fi
+          echo "--- End Debugging Environment Variables ---"
+
+      # 7. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.

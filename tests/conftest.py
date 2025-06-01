@@ -57,7 +57,7 @@ def load_test_env():
 
 # --- Backend Fixtures ---
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def local_backend() -> Generator[IStorageBackend, None, None]:
     """Fixture for LocalFileBackend using settings from .env.test, cleans up afterwards."""
     root_path_str = os.environ.get("STORAGE_LOCAL_ROOT_PATH", "./test_data_fallback")
@@ -95,7 +95,7 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
                 print(f"Retrying cleanup for {local_test_root_dir}...")
                 time.sleep(0.5) # Wait briefly before retrying
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 async def azure_backend() -> AsyncGenerator[IStorageBackend, None]: # Async fixture
     """Fixture for AzureBlobBackend using service principal authentication."""
     account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME")
@@ -227,7 +227,7 @@ def check_no_data_dirs_after_tests():
 logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 async def setup_historical_data(request, local_backend, azure_backend) -> AsyncGenerator[dict, None]:
     """
     Fetches recent historical data using CCXT and saves it using the storage_manager.
