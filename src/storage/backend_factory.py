@@ -3,7 +3,6 @@ Configuration factory for creating storage backends based on settings.
 """
 
 import logging
-from typing import Union
 from storage.backends.istorage_backend import IStorageBackend
 from storage.backends.local_file_backend import LocalFileBackend
 from storage.backends.azure_blob_backend import AzureBlobBackend
@@ -60,5 +59,5 @@ def create_storage_backend(
 
     else:
         raise ValueError(
-            f"Unsupported storage configuration: neither local nor Azure storage is properly configured"
+            "Unsupported storage configuration: neither local nor Azure storage is properly configured"
         )

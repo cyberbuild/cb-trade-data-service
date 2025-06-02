@@ -3,7 +3,6 @@ import sys
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
-import os
 
 # Import the new storage config structure
 from storage.storage_settings import StorageConfig
@@ -34,9 +33,8 @@ class Settings(BaseSettings):
     ccxt: CCXTConfig = Field(default_factory=CCXTConfig)
     # Exchange ID for CCXT client
     exchange_id: str = Field(
-        description="Exchange ID to use with CCXT client",
-        alias="CCXT_DEFAULT_EXCHANGE"
-    )    # Add other nested configs
+        description="Exchange ID to use with CCXT client", alias="CCXT_DEFAULT_EXCHANGE"
+    )  # Add other nested configs
     # Pydantic-settings automatically loads .env files by default
     # Configure loading behavior
     model_config = SettingsConfigDict(
@@ -48,7 +46,7 @@ class Settings(BaseSettings):
 def _create_storage_config() -> StorageConfig:
     """Create the appropriate storage config based on available environment variables."""
     logger.info("Default factory for storage invoked.")
-    
+
     # The new StorageConfig class handles both local and Azure automatically
     # based on available environment variables
     try:
@@ -65,18 +63,18 @@ def get_settings(env_file: str = ".env") -> Settings:
     try:
         # Create storage config with the specified env_file
         storage_config = StorageConfig(_env_file=env_file)
-        
+
         # Create settings with the storage config
         settings = Settings(storage=storage_config, _env_file=env_file)
-        logger.info(
-            f"Successfully loaded Settings."
-        )
-       
+        logger.info("Successfully loaded Settings.")
+
         logger.info(f"Exchange ID: {settings.exchange_id}")
 
         return settings
     except Exception as e:
-        logger.error(f"Error loading Settings with env_file {env_file}: {e}", exc_info=True)
+        logger.error(
+            f"Error loading Settings with env_file {env_file}: {e}", exc_info=True
+        )
         raise
 
 

@@ -3,9 +3,6 @@ import logging
 from pydantic import Field, SecretStr, model_validator, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import (
-    Literal,
-    Union,
-    Annotated,
     Any,
     Dict,
     List,
@@ -18,9 +15,7 @@ logger = logging.getLogger(__name__)
 # Define settings for Local Storage
 class LocalStorageSettings(BaseSettings):
     # Allow ignoring extra fields from environment for discriminated union
-    model_config = SettingsConfigDict(
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(extra="ignore")
     root_path: str = Field(validation_alias="STORAGE_ROOT_PATH")
 
     @model_validator(mode="before")
@@ -44,7 +39,7 @@ class LocalStorageSettings(BaseSettings):
 class AzureStorageSettings(BaseSettings):
     # Allow ignoring extra fields from environment for discriminated union
     model_config = SettingsConfigDict(extra="ignore")
-    
+
     # Authentication options - either connection string OR managed identity
     connection_string: Optional[SecretStr] = Field(
         default=None, validation_alias="STORAGE_AZURE_CONNECTION_STRING"
@@ -55,15 +50,11 @@ class AzureStorageSettings(BaseSettings):
     subscription_id: Optional[str] = Field(
         default=None, validation_alias="AZURE_SUBSCRIPTION_ID"
     )
-    client_id: Optional[str] = Field(
-        default=None, validation_alias="AZURE_CLIENT_ID"
-    )
+    client_id: Optional[str] = Field(default=None, validation_alias="AZURE_CLIENT_ID")
     client_secret: Optional[SecretStr] = Field(
         default=None, validation_alias="AZURE_CLIENT_SECRET"
     )
-    tenant_id: Optional[str] = Field(
-        default=None, validation_alias="AZURE_TENANT_ID"
-    )
+    tenant_id: Optional[str] = Field(default=None, validation_alias="AZURE_TENANT_ID")
     use_managed_identity: bool = Field(
         default=False, validation_alias="STORAGE_AZURE_USE_MANAGED_IDENTITY"
     )
@@ -89,11 +80,12 @@ class StorageConfig(BaseSettings):
     Unified storage configuration that supports both local and Azure storage
     based on available environment variables.
     """
+
     model_config = SettingsConfigDict(extra="ignore")
-    
+
     # Local storage fields
     root_path: Optional[str] = Field(default=None, validation_alias="STORAGE_ROOT_PATH")
-    
+
     # Azure storage fields
     connection_string: Optional[SecretStr] = Field(
         default=None, validation_alias="STORAGE_AZURE_CONNECTION_STRING"
@@ -104,14 +96,11 @@ class StorageConfig(BaseSettings):
     subscription_id: Optional[str] = Field(
         default=None, validation_alias="AZURE_SUBSCRIPTION_ID"
     )
-    client_id: Optional[str] = Field(
-        default=None, validation_alias="AZURE_CLIENT_ID"
-    )
+    client_id: Optional[str] = Field(default=None, validation_alias="AZURE_CLIENT_ID")
     client_secret: Optional[SecretStr] = Field(
         default=None, validation_alias="AZURE_CLIENT_SECRET"
     )
-    tenant_id: Optional[str] = Field(
-        default=None, validation_alias="AZURE_TENANT_ID"    )
+    tenant_id: Optional[str] = Field(default=None, validation_alias="AZURE_TENANT_ID")
     use_managed_identity: bool = Field(
         default=False, validation_alias="STORAGE_AZURE_USE_MANAGED_IDENTITY"
     )
@@ -121,11 +110,17 @@ class StorageConfig(BaseSettings):
 
     def is_local_storage(self) -> bool:
         """Check if this configuration is for local storage."""
-        return bool(self.root_path and not self.connection_string and not (self.account_name and self.use_managed_identity))
-    
+        return bool(
+            self.root_path
+            and not self.connection_string
+            and not (self.account_name and self.use_managed_identity)
+        )
+
     def is_azure_storage(self) -> bool:
         """Check if this configuration is for Azure storage."""
-        return bool(self.connection_string or (self.account_name and self.use_managed_identity))
+        return bool(
+            self.connection_string or (self.account_name and self.use_managed_identity)
+        )
 
 
 # Storage settings for operations

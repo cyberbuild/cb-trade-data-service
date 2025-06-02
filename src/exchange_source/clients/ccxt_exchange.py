@@ -13,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class CCXTExchangeClient(IExchangeAPIClient):
-    def __init__(self, config: CCXTConfig, api_key: Optional[str] = None, exchange_id: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        config: CCXTConfig,
+        api_key: Optional[str] = None,
+        exchange_id: Optional[str] = None,
+        **kwargs,
+    ):
         self.config = config
         # Use explicitly passed exchange_id, not the config's default
         if not exchange_id:
