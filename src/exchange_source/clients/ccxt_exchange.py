@@ -13,9 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 class CCXTExchangeClient(IExchangeAPIClient):
-    def __init__(self, config: CCXTConfig, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, config: CCXTConfig, api_key: Optional[str] = None, exchange_id: Optional[str] = None, **kwargs):
         self.config = config
-        self.exchange_id = config.exchange_id
+        # Use explicitly passed exchange_id, not the config's default
+        if not exchange_id:
+            raise ValueError("exchange_id must be explicitly provided")
+        self.exchange_id = exchange_id
         exchange_class = getattr(ccxt, self.exchange_id)
         params = {"enableRateLimit": True}
 

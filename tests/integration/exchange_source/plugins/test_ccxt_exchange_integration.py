@@ -1,26 +1,27 @@
 # tests/integration/exchange_source/plugins/test_ccxt_exchange_integration.py
+
 import pytest
 import datetime
 import logging
+import os
 from exchange_source.clients.ccxt_exchange import CCXTExchangeClient
-from config import get_settings
+from config import get_settings, Settings
 from exchange_source.models import ExchangeData, OHLCVRecord
 
 logger = logging.getLogger(__name__)
 
 # Use yield to allow for cleanup after tests in the module run
-@pytest.fixture(scope="function")  # Use function scope for async client
-async def client(): # Make the fixture async
+@pytest.fixture(scope="function")
+async def client(monkeypatch):
+    # Patch the environment to ensure Azure storage is used
+    monkeypatch.setenv("STORAGE_TYPE", "azure")
     settings = get_settings()
-    # Ensure you have cryptocom credentials in your .env or environment
-    # Pass the specific ccxt config section from the main settings
-    _client = CCXTExchangeClient(config=settings.ccxt)
+    _client = CCXTExchangeClient(config=settings.ccxt, exchange_id=settings.exchange_id)
     try:
-        yield _client # Provide the client to the tests
+        yield _client
     finally:
-        # Cleanup: Close the client connection after tests are done
         logger.info("Closing CCXT client connection...")
-        await _client.close() # Use close() for async cleanup
+        await _client.close()
         logger.info("CCXT client connection closed.")
 
 @pytest.mark.integration

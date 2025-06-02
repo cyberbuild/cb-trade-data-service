@@ -19,5 +19,5 @@ class CCXTExchangeDataService(ExchangeDataService):
     def __init__(
         self, settings: Settings, historical_data_manager: IHistoricalDataManager
     ):
-        exchange_client = CCXTExchangeClient(config=settings.ccxt)
+        exchange_client = CCXTExchangeClient(config=settings.ccxt, exchange_id=settings.exchange_id)
         super().__init__(exchange_client, historical_data_manager)

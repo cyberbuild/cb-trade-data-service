@@ -7,13 +7,13 @@ from typing import Union
 from storage.backends.istorage_backend import IStorageBackend
 from storage.backends.local_file_backend import LocalFileBackend
 from storage.backends.azure_blob_backend import AzureBlobBackend
-from storage.storage_settings import LocalStorageSettings, AzureStorageSettings
+from storage.storage_settings import StorageConfig
 
 logger = logging.getLogger(__name__)
 
 
 def create_storage_backend(
-    storage_config: Union[LocalStorageSettings, AzureStorageSettings],
+    storage_config: StorageConfig,
 ) -> IStorageBackend:
     """
     Create the appropriate storage backend based on configuration.
@@ -27,13 +27,13 @@ def create_storage_backend(
     Raises:
         ValueError: If configuration is invalid or unsupported
     """
-    if isinstance(storage_config, LocalStorageSettings):
+    if storage_config.is_local_storage():
         logger.info(
             f"Creating LocalFileBackend with root path: {storage_config.root_path}"
         )
         return LocalFileBackend(root_path=storage_config.root_path)
 
-    elif isinstance(storage_config, AzureStorageSettings):
+    elif storage_config.is_azure_storage():
         if storage_config.use_managed_identity and storage_config.account_name:
             logger.info(
                 f"Creating AzureBlobBackend with managed identity for account: {storage_config.account_name}"
@@ -60,5 +60,5 @@ def create_storage_backend(
 
     else:
         raise ValueError(
-            f"Unsupported storage configuration type: {type(storage_config)}"
+            f"Unsupported storage configuration: neither local nor Azure storage is properly configured"
         )

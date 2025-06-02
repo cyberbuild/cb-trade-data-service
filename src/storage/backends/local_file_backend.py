@@ -163,8 +163,9 @@ class LocalFileBackend(IStorageBackend):
     async def makedirs(self, identifier: str, exist_ok: bool = True):
         """Ensure that the directory for the identifier exists."""
         full_path = self._get_full_path(identifier)
-        # We want the directory *containing* the identifier if it looks like a file path
-        dir_path = full_path.parent if "." in full_path.name else full_path
+        # For Delta Lake tables, we need to ensure the full path exists as a directory
+        # since Delta Lake will create subdirectories like _delta_log within it
+        dir_path = full_path
         try:
             await aiofiles.os.makedirs(dir_path, exist_ok=exist_ok)
             logger.debug(f"Ensured directory exists: {dir_path}")

@@ -1,5 +1,5 @@
 from exchange_source.models import ExchangeData, OHLCVRecord
-\
+
 import pytest
 import pandas as pd
 import pyarrow as pa
@@ -13,6 +13,7 @@ from pathlib import Path
 
 # Use PEP 420 compliant imports
 from storage.storage_manager import StorageManager, IStorageManager
+from config import get_settings
 
 
 # Import helpers from the shared location
@@ -35,9 +36,7 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     # Use the backend type from the manager instance for logging
     backend_type = type(storage_manager.backend).__name__
     print(f"\n--- Running Test Flow --- Backend: {backend_type} ---")
-    timestamp_col = test_context.get('timestamp_col', 'timestamp')
-
-    # 1. Define Time Range (3 days)
+    timestamp_col = test_context.get('timestamp_col', 'timestamp')    # 1. Define Time Range (3 days)
     day1_start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     day1_end = datetime(2024, 1, 1, 23, 59, 59, tzinfo=timezone.utc)
     # Start day2 at 01:00 to create a midnight gap
@@ -47,10 +46,11 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
     day3_end = datetime(2024, 1, 3, 23, 59, 59, tzinfo=timezone.utc)
     full_range_start = day1_start
     full_range_end = day3_end
-    freq_minutes = 60 # Use hourly data for simplicity    # 2. Fetch Initial Data (with gaps) from CCXTExchange
+    freq_minutes = 60 # Use hourly data for simplicity
+      # 2. Fetch Initial Data (with gaps) from CCXTExchange
     print("Fetching initial data from CCXTExchange...")
     settings = get_settings()
-    real_exchange = settings.ccxt.default_exchange
+    real_exchange = settings.exchange_id
     ccxt_client = CCXTExchangeClient(config=settings.ccxt, exchange_id=real_exchange)
     
     try:
@@ -351,9 +351,11 @@ async def _run_storage_manager_test_flow(storage_manager: IStorageManager, test_
 
 @pytest.mark.integration # Mark as integration test
 @pytest.mark.asyncio # Mark test as async
+@pytest.mark.parametrize("storage_manager", ["local", "azure"], indirect=True)
 async def test_storage_manager_integration_flow(storage_manager: IStorageManager):
     
-    exchange = os.environ.get("CCXT__DEFAULT_EXCHANGE", "cryptocom")
+    settings = get_settings()
+    exchange = settings.exchange_id
     
     test_context = {
         'data_type': 'ohlcv',

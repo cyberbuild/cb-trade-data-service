@@ -2,6 +2,7 @@ import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 from exchange_data_service.ccxt_exchange_data_service import CCXTExchangeDataService
 from exchange_data_service.interface import Interval
 from historical.manager import HistoricalDataManagerImpl
@@ -24,6 +25,11 @@ def ccxt_exchange_data_service(settings, storage_manager):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_data_integration(ccxt_exchange_data_service, setup_historical_data):
     """Test the get_data ABC method with real data from setup fixture."""
     context = setup_historical_data
@@ -46,6 +52,11 @@ async def test_get_data_integration(ccxt_exchange_data_service, setup_historical
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_data_with_enum_interval(ccxt_exchange_data_service, setup_historical_data):
     """Test the internal _get_data_with_enum method with Interval enum."""
     context = setup_historical_data
@@ -67,6 +78,7 @@ async def test_get_data_with_enum_interval(ccxt_exchange_data_service, setup_his
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("storage_manager", ["local", "azure"], indirect=True)
 async def test_sync_with_exchange_async_method(ccxt_exchange_data_service):
     """Test the internal async sync method - this is the core ABC functionality."""
     symbol = 'BTC/USDT'
@@ -85,6 +97,7 @@ async def test_sync_with_exchange_async_method(ccxt_exchange_data_service):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("storage_manager", ["local", "azure"], indirect=True)
 async def test_end_to_end_sync_and_retrieve(ccxt_exchange_data_service):
     """Test end-to-end: sync data then retrieve it using async methods."""
     symbol = 'BTC/USDT'
@@ -109,6 +122,7 @@ async def test_end_to_end_sync_and_retrieve(ccxt_exchange_data_service):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("storage_manager", ["local", "azure"], indirect=True)
 async def test_multiple_intervals(ccxt_exchange_data_service):
     """Test the service with different interval types using async methods."""
     symbol = 'BTC/USDT'    
@@ -131,6 +145,7 @@ async def test_multiple_intervals(ccxt_exchange_data_service):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("storage_manager", ["local", "azure"], indirect=True)
 async def test_error_handling_invalid_symbol(ccxt_exchange_data_service):
     """Test error handling with invalid symbol."""
     invalid_symbol = 'INVALID/SYMBOL'

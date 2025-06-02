@@ -17,6 +17,11 @@ def fetcher(storage_manager: IStorageManager):
 # Test fetching when data exists (using setup fixture)
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_integration_fetch_data_with_stored_data(fetcher, setup_historical_data):
     """Test fetching data within the range populated by the setup fixture."""
     context = setup_historical_data
@@ -50,6 +55,7 @@ async def test_integration_fetch_data_with_stored_data(fetcher, setup_historical
 # Test fetching when no data exists for the context
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("storage_manager", ["local", "azure"], indirect=True)
 async def test_integration_fetch_data_empty_storage(fetcher):
     """Test fetching data returns empty when no data exists for the context."""
     end_time = datetime.now(timezone.utc)
@@ -69,6 +75,11 @@ async def test_integration_fetch_data_empty_storage(fetcher):
 # Test fetching with limit and offset using the setup data
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_integration_fetch_data_with_limit_offset(fetcher, setup_historical_data):
     """Test fetching data with limit and offset parameters using setup data."""
     context = setup_historical_data
@@ -120,7 +131,13 @@ async def test_integration_fetch_data_with_limit_offset(fetcher, setup_historica
 # Test fetching a specific time range within the setup data
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_integration_fetch_data_time_range(fetcher, setup_historical_data):
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
+async def test_integration_fetch_data_time_range(fetcher, setup_historical_data, env_logger_func): # Add env_logger_func fixture
+    env_logger_func(logger, context_message=f"Inside test_integration_fetch_data_time_range ({setup_historical_data.get('exchange')}) before any operations") # Call via fixture
     """Test fetching data within a specific sub-range of the setup data."""
     context = setup_historical_data
     metadata = Metadata(context)
@@ -153,6 +170,11 @@ async def test_integration_fetch_data_time_range(fetcher, setup_historical_data)
 # Test ExchangeData conversion methods with fetcher results
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_integration_exchange_data_conversion(fetcher, setup_historical_data):
     """Test ExchangeData conversion methods with fetcher results."""
     context = setup_historical_data
@@ -181,6 +203,11 @@ async def test_integration_exchange_data_conversion(fetcher, setup_historical_da
 # Test format conversion of fetched data
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_integration_fetch_data_with_format_conversion(fetcher, setup_historical_data):
     """Test converting fetched ExchangeData to different formats."""
     context = setup_historical_data

@@ -29,6 +29,11 @@ class DummyWS:
 # Test getting the most current data (uses HistoricalFetcher internally)
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_most_current_data_integration(storage_manager, setup_historical_data):
     """Test getting the most current data point using the manager."""
     context = setup_historical_data
@@ -48,6 +53,11 @@ async def test_get_most_current_data_integration(storage_manager, setup_historic
 # Test paging functionality
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_historical_data_with_paging_limit(storage_manager, setup_historical_data):
     """Test getting historical data with limit pagination."""
     context = setup_historical_data
@@ -67,6 +77,11 @@ async def test_get_historical_data_with_paging_limit(storage_manager, setup_hist
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_historical_data_with_paging_offset(storage_manager, setup_historical_data):
     """Test getting historical data with offset pagination."""
     context = setup_historical_data
@@ -97,6 +112,11 @@ async def test_get_historical_data_with_paging_offset(storage_manager, setup_his
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_historical_data_all_records(storage_manager, setup_historical_data):
     """Test getting all historical data without pagination."""
     context = setup_historical_data
@@ -117,6 +137,11 @@ async def test_get_historical_data_all_records(storage_manager, setup_historical
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_historical_data_no_paging_parameter(storage_manager, setup_historical_data):
     """Test getting historical data without specifying paging parameter (should default to all records)."""
     context = setup_historical_data
@@ -136,6 +161,11 @@ async def test_get_historical_data_no_paging_parameter(storage_manager, setup_hi
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_get_historical_data_large_offset(storage_manager, setup_historical_data):
     """Test getting historical data with offset larger than available data."""
     context = setup_historical_data
@@ -154,6 +184,11 @@ async def test_get_historical_data_large_offset(storage_manager, setup_historica
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "storage_manager,setup_historical_data", 
+    [("local", "local"), ("azure", "azure")], 
+    indirect=True
+)
 async def test_paging_consistency_across_calls(storage_manager, setup_historical_data):
     """Test that paging returns consistent results across multiple calls."""
     context = setup_historical_data

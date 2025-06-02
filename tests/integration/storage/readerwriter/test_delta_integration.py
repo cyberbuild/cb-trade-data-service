@@ -4,6 +4,7 @@ import uuid
 import pytest
 import pandas as pd
 import pyarrow as pa
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Generator
 
@@ -67,7 +68,7 @@ def test_context() -> Dict[str, Any]:
     """Provides a sample context dictionary, simulating StorageManager context."""
     from config import get_settings
     settings = get_settings()
-    real_exchange = settings.ccxt.default_exchange
+    real_exchange = settings.exchange_id
     
     # Use unique run ID to avoid collisions between parallel tests if ever run
     run_id = uuid.uuid4()
@@ -102,7 +103,8 @@ async def test_delta_write_read(
     delta_reader_writer: DeltaReaderWriter,
     sample_data: pa.Table,
     storage_settings: StorageSettings,
-    test_context: Dict[str, Any]
+    test_context: Dict[str, Any],
+    path_strategy: IStoragePathStrategy
 ):
     """
     Tests writing data using save_table and reading it back using load_range.
@@ -115,20 +117,13 @@ async def test_delta_write_read(
     # --- Write ---
     logger.info(f'[{backend_type}] Writing sample data...')
     
-    if backend_type == "azure":
-        path_strategy = OHLCVTestPathStrategy()
-    else:
-        path_strategy = OHLCVPathStrategy()
-
     # Generate proper path using strategy
     relative_path = path_strategy.generate_base_path(test_context)
     
     # Get the full path for writing
     # For our test we'll just use the relative path directly
     write_base_path = relative_path
-    logger.info(f'[{backend_type}] Target write base path: {write_base_path}')
-
-    # Call save_table (which delegates to save_data)
+    logger.info(f'[{backend_type}] Target write base path: {write_base_path}')    # Call save_table (which delegates to save_data)
     await delta_reader_writer.save_table(
         data_table=sample_data,
         path=write_base_path,
@@ -136,6 +131,12 @@ async def test_delta_write_read(
         partition_cols=storage_settings.partition_cols
     )
     logger.info(f'[{backend_type}] Data written successfully.')
+    
+    # Add delay for Azure eventual consistency
+    if backend_type == "AzureBlobBackend":
+        import asyncio
+        await asyncio.sleep(2)  # Give Azure time to propagate the write
+        logger.info(f'[{backend_type}] Waited for Azure consistency.')
     
     # --- Read ---
     logger.info(f'[{backend_type}] Reading data back...')
@@ -147,21 +148,38 @@ async def test_delta_write_read(
     logger.info(f'[{backend_type}] Target read base path: {read_base_path}')
 
     timestamp_col = storage_settings.timestamp_col if hasattr(storage_settings, 'timestamp_col') else 'timestamp'
-    try:
-        # Call load_range with backend as first argument (interface compliance)
-        read_table = await delta_reader_writer.load_range(
-            delta_reader_writer.backend,
-            read_base_path,
-            start_date,
-            end_date,
-            None,
-            None,
-            timestamp_col
-        )
-        logger.info(f'[{backend_type}] Data read successfully. Rows: {read_table.num_rows}')
-    except Exception as e:
-        logger.error(f'[{backend_type}] Error during read: {e}', exc_info=True)
-        pytest.fail(f'[{backend_type}] Failed to read data: {e}')
+    
+    # Add retry logic for Azure eventual consistency
+    read_table = None
+    max_retries = 5 if backend_type == "AzureBlobBackend" else 1
+    
+    for attempt in range(max_retries):
+        try:
+            # Call load_range with backend as first argument (interface compliance)
+            read_table = await delta_reader_writer.load_range(
+                delta_reader_writer.backend,
+                read_base_path,
+                start_date,
+                end_date,
+                None,
+                None,
+                timestamp_col
+            )
+            if read_table is not None and read_table.num_rows > 0:
+                break  # Success
+            elif attempt < max_retries - 1:
+                logger.info(f'[{backend_type}] Read attempt {attempt + 1} returned {read_table.num_rows if read_table else 0} rows, retrying...')
+                await asyncio.sleep(1)  # Wait before retry
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f'[{backend_type}] Read attempt {attempt + 1} failed: {e}, retrying...')
+                await asyncio.sleep(1)
+            else:
+                logger.error(f'[{backend_type}] Error during read: {e}', exc_info=True)
+                pytest.fail(f'[{backend_type}] Failed to read data: {e}')
+    
+    logger.info(f'[{backend_type}] Data read successfully. Rows: {read_table.num_rows}')
 
     # --- Verification ---
     logger.info(f'[{backend_type}] Verifying data...')
