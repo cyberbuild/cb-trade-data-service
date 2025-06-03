@@ -69,7 +69,8 @@ class AzureBlobBackend(IStorageBackend):
             logger.info(
                 f"Using connection string authentication for storage account: {self.account_name}"
             )
-        else:            raise ValueError(
+        else:
+            raise ValueError(
                 "Either connection_string or (account_name + use_managed_identity=True) must be provided."
             )
 
@@ -96,7 +97,7 @@ class AzureBlobBackend(IStorageBackend):
     async def _get_container_client(self) -> ContainerClient:
         """Initializes and returns the ContainerClient, creating container if needed."""
         if self._container_client is None:
-            try:                
+            try:
                 if self.auth_mode == "managed_identity":
                     # Use DefaultAzureCredential for authentication
                     self._credential = DefaultAzureCredential()
@@ -422,7 +423,7 @@ class AzureBlobBackend(IStorageBackend):
         logger.debug(
             f"Azure makedirs called for {identifier}. Generally a no-op unless creating explicit markers."
         )
-        pass  # Often a no-op for blob storage    
+        pass  # Often a no-op for blob storage
 
     async def close(self):
         """Closes the underlying BlobServiceClient and credential."""
@@ -435,7 +436,7 @@ class AzureBlobBackend(IStorageBackend):
             finally:
                 self._service_client = None
                 self._container_client = None
-                
+
         # Close the credential if it exists
         if self._credential:
             try:

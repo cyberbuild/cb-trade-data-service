@@ -129,7 +129,7 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
             if local_test_root_dir.exists():
                 shutil.rmtree(local_test_root_dir)
                 print(f"Cleaned up local test directory: {local_test_root_dir}")
-            
+
             # Clean up parent test_data directory if it's empty
             parent_test_data = project_root / storage_root_path
             if parent_test_data.exists() and parent_test_data.name == "test_data":
@@ -160,28 +160,28 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:  # Async fix
     if hasattr(settings.storage, "container_name"):
         base_container_name = settings.storage.container_name
         use_identity = str(settings.storage.use_managed_identity)
-        az_account_name = settings.storage.account_name    
+        az_account_name = settings.storage.account_name
     else:
         base_container_name = os.environ.get(
             "STORAGE_AZURE_CONTAINER_NAME", "test-container-fallback"
         )
         use_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "true")
         az_account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME", "unknown")
-    
+
     # Create unique container name per test to avoid thread safety issues
     unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
-    
+
     backend = AzureBlobBackend(
         container_name=unique_container_name,
         use_managed_identity=use_identity,
         account_name=az_account_name,
     )
-    
+
     try:
         # Initialize the backend
         await backend.__aenter__()
         yield backend
-    finally:        # Do cleanup operations while client is still active
+    finally:  # Do cleanup operations while client is still active
         try:
             print(f"Attempting to delete test container: {unique_container_name}")
             await backend._service_client.delete_container(unique_container_name)
@@ -190,7 +190,7 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:  # Async fix
             print(
                 f"Warning: Failed to delete test container {unique_container_name}: {e}"
             )
-        
+
         # Now close the client properly
         try:
             await backend.__aexit__(None, None, None)
@@ -215,7 +215,9 @@ async def _cleanup_azure_test_data_async(container_name: str, account_name: str)
             async with BlobServiceClient(
                 account_url=account_url, credential=credential
             ) as blob_service_client:
-                container_client = blob_service_client.get_container_client(container_name)
+                container_client = blob_service_client.get_container_client(
+                    container_name
+                )
 
                 # List and delete test folders
                 test_folders = set()
@@ -420,7 +422,7 @@ def cleanup_data_dirs_after_tests():
     project_root = Path(__file__).parent.parent
     data_dir = project_root / "data"
     test_data_dir = project_root / "test_data"
-    
+
     cleaned = []
     if test_data_dir.exists():
         try:
@@ -428,10 +430,12 @@ def cleanup_data_dirs_after_tests():
             cleaned.append(str(test_data_dir))
         except Exception as e:
             print(f"Warning: Failed to clean up {test_data_dir}: {e}")
-    
+
     if data_dir.exists():
         # Only clean if it looks like test data (contains run_ directories)
-        run_dirs = [d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith("run_")]
+        run_dirs = [
+            d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith("run_")
+        ]
         if run_dirs:
             try:
                 for run_dir in run_dirs:
@@ -444,7 +448,7 @@ def cleanup_data_dirs_after_tests():
                     pass  # Not empty, leave it
             except Exception as e:
                 print(f"Warning: Failed to clean up test data in {data_dir}: {e}")
-    
+
     if cleaned:
         print(f"Cleaned up test directories: {cleaned}")
 
@@ -636,7 +640,7 @@ def cleanup_azure_test_folders():
     Disabled when running with pytest-xdist (parallel execution) to avoid interference.
     """
     yield  # Let all tests run first
-    
+
     def _cleanup_azure_test_folders():
         try:
             # Skip cleanup if running with pytest-xdist (parallel execution)
