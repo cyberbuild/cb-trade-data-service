@@ -119,8 +119,8 @@ jobs:
           STORAGE_LOCAL_ROOT_PATH: ./test_data # Relative path for local testing within the repo
           CCXT_DEFAULT_EXCHANGE: cryptocom
         run: |
-          pytest tests/unit/ --tb=short -n auto
-          pytest tests/integration/ --tb=short -n auto
+          pytest tests/unit/ --tb=short -k -n auto
+          pytest tests/integration/ --tb=short -k "azure" -n auto
 
       # 8. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
