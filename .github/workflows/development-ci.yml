@@ -69,9 +69,7 @@ jobs:
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
           STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
           STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
-          
-          STORAGE__TYPE: local
-          STORAGE_LOCAL_ROOT_PATH: ./test_data
+            STORAGE_ROOT_PATH: ./test_data # Correct environment variable name
           CCXT__DEFAULT_EXCHANGE: cryptocom
         run: |
           echo "--- Debugging Environment Variables ---"
@@ -113,10 +111,8 @@ jobs:
           
           # Fallback to connection string if needed (for transition period)
           STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
-          
-          # Non-sensitive configurations from your .env.test file
-          STORAGE__TYPE: local
-          STORAGE_LOCAL_ROOT_PATH: ./test_data # Relative path for local testing within the repo
+            # Non-sensitive configurations from your .env.test file
+          STORAGE_ROOT_PATH: ./test_data # Correct environment variable name
           CCXT_DEFAULT_EXCHANGE: cryptocom
         run: |
           pytest tests/unit/ --tb=short -n auto

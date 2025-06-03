@@ -84,7 +84,13 @@ def env_logger_func():
 
 # --- Backend Fixtures ---
 def test_settings() -> Settings:
-    settings = get_settings(env_file=".env.test")
+    """Load test settings, fallback to defaults if .env.test doesn't exist."""
+    import os
+    if os.path.exists(".env.test"):
+        settings = get_settings(env_file=".env.test")
+    else:
+        # No env file - just use environment variables and defaults
+        settings = get_settings(env_file=None)
     return settings
 
 
@@ -94,11 +100,8 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
     settings = test_settings()
 
     # Get STORAGE_ROOT_PATH from settings
-    if hasattr(settings.storage, "root_path"):
-        storage_root_path = settings.storage.root_path
-    else:
-        storage_root_path = "./test_data"
-
+    storage_root_path = settings.storage.root_path
+   
     project_root = Path(__file__).parent.parent.resolve()
 
     # Check if STORAGE_ROOT_PATH is relative or absolute
