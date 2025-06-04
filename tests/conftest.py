@@ -173,22 +173,38 @@ async def azure_backend() -> AsyncIterator[IStorageBackend]:
             "STORAGE_AZURE_CONTAINER_NAME", "test-container-fallback"
         )
         use_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "true")
-        az_account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME", "unknown")
-
-    # Create unique container name per test to avoid thread safety issues
+        az_account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME", "unknown")    # Create unique container name per test to avoid thread safety issues
     unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
 
     backend = AzureBlobBackend(
         container_name=unique_container_name,
-        use_managed_identity=use_identity,
+        use_managed_identity=use_identity.lower() == "true",
         account_name=az_account_name,
     )
 
-    # Use async context manager properly
-    async with backend:
-        yield backend
-        # Small delay to allow Azure SDK to complete any pending operations
-        await asyncio.sleep(0.1)
+    try:
+        # Initialize the backend
+        async with backend:
+            logger.info(f"Azure backend fixture initialized for container: {unique_container_name}")
+            yield backend
+            logger.info(f"Azure backend fixture yielding complete for container: {unique_container_name}")
+    except Exception as e:
+        logger.error(f"Error in azure_backend fixture: {e}")
+        raise
+    finally:
+        # Ensure explicit cleanup - the async context manager should handle this,
+        # but we'll add explicit cleanup as a safety net
+        try:
+            if hasattr(backend, '_closed') and not backend._closed:
+                await backend.close()
+        except Exception as cleanup_error:
+            logger.warning(f"Error during explicit cleanup in fixture: {cleanup_error}")
+        
+        # Add small delay to allow Azure SDK to complete any pending operations
+        try:
+            await asyncio.sleep(0.1)
+        except Exception:
+            pass  # Ignore any issues with the sleep
 
 
 # --- Async Azure cleanup helper for thread safety ---
@@ -260,7 +276,7 @@ def test_path_strategy():
 # --- Parameterized StorageManager Fixture ---
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def storage_manager(
     request, local_backend, azure_backend, test_path_strategy
 ) -> AsyncGenerator[IStorageManager[IExchangeRecord], None]:
@@ -299,7 +315,7 @@ async def storage_manager(
     # No explicit close for manager here; its backend is closed by its own fixture (local_backend/azure_backend)
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def setup_historical_data(
     request, local_backend, azure_backend, test_path_strategy
 ) -> AsyncGenerator[dict, None]:
