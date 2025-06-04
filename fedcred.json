@@ -1,6 +1,0 @@
-{
-  "name": "cb-trade-all-branches",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:cyberbuild/cb-trade-data-service:ref:refs/heads/*",
-  "audiences": ["api://AzureADTokenExchange"]
-}
