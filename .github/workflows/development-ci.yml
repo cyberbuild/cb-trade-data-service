@@ -19,14 +19,15 @@ permissions:
   pull-requests: write # Needed to create pull requests
   id-token: write # Required for OIDC authentication with Azure
 
-jobs:
+jobs:  
   build-test-publish-and-pr:
     name: Build, Test, Publish & Create PR
     runs-on: ubuntu-latest # Specifies the type of runner the job will run on
     env: # Set environment variables for all steps in this job
-      PYTHON DONTWRITEBYTECODE: '1' # Prevents Python from writing .pyc files
+      PYTHONDONTWRITEBYTECODE: '1' # Prevents Python from writing .pyc files
 
-    steps:      # 1. Checkout your repository code
+    steps:
+      # 1. Checkout your repository code
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -137,7 +138,7 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.GITHUB_TOKEN }}
-          repository_url: https://pypi.pkg.github.com/YOUR_USERNAME_OR_ORG/ # IMPORTANT: Replace with your GitHub username or organization
+          repository_url: https://pypi.pkg.github.com/cyberbuild/
 
       # 9. Create Pull Request from development to master (only on direct push to development)
       - name: Create Pull Request to master
