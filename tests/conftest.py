@@ -89,6 +89,7 @@ def env_logger_func():
 def test_settings() -> Settings:
     """Load test settings, fallback to defaults if .env.test doesn't exist."""
     import os
+
     if os.path.exists(".env.test"):
         settings = get_settings(env_file=".env.test")
     else:
@@ -104,7 +105,7 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
 
     # Get STORAGE_ROOT_PATH from settings
     storage_root_path = settings.storage.root_path
-   
+
     project_root = Path(__file__).parent.parent.resolve()
 
     # Check if STORAGE_ROOT_PATH is relative or absolute
@@ -182,10 +183,10 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
         use_managed_identity=use_identity,
         account_name=az_account_name,
     )
-    
+
     # Setup the backend
     await backend.__aenter__()
-    
+
     try:
         yield backend
     finally:
@@ -194,7 +195,7 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
             await backend.__aexit__(None, None, None)
         except Exception as e:
             print(f"Azure backend cleanup warning: {e}")
-        
+
         try:
             await backend.close()
         except Exception as e:

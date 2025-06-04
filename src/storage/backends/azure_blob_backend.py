@@ -419,9 +419,10 @@ class AzureBlobBackend(IStorageBackend):
         #         logger.debug(f"Directory marker blob already exists: {self.container_name}/{dir_identifier}")        # except Exception as e:
         #     logger.error(f"Error creating directory marker blob {self.container_name}/{dir_identifier}: {e}")
         #     raise
-        
+
         logger.debug(
-            f"Azure makedirs called for {identifier}. Generally a no-op unless creating explicit markers."        )
+            f"Azure makedirs called for {identifier}. Generally a no-op unless creating explicit markers."
+        )
         pass  # Often a no-op for blob storage
 
     async def close(self):
@@ -429,28 +430,30 @@ class AzureBlobBackend(IStorageBackend):
         # Prevent double closing
         if self._service_client is None and self._credential is None:
             return
-            
-        cleanup_errors = []        # Close service client and its underlying HTTP session
+
+        cleanup_errors = []  # Close service client and its underlying HTTP session
         if self._service_client:
             try:
                 # More aggressive session cleanup for Azure SDK's multiple sessions
-                if hasattr(self._service_client, '_client'):
+                if hasattr(self._service_client, "_client"):
                     client = self._service_client._client
-                    
+
                     # Close session if it exists
-                    if hasattr(client, '_session') and client._session:
+                    if hasattr(client, "_session") and client._session:
                         if not client._session.closed:
                             await client._session.close()
                             logger.info("Closed BlobServiceClient aiohttp session.")
-                    
+
                     # Check for pipeline transport sessions
-                    if hasattr(client, '_pipeline') and hasattr(client._pipeline, '_transport'):
+                    if hasattr(client, "_pipeline") and hasattr(
+                        client._pipeline, "_transport"
+                    ):
                         transport = client._pipeline._transport
-                        if hasattr(transport, 'session') and transport.session:
+                        if hasattr(transport, "session") and transport.session:
                             if not transport.session.closed:
                                 await transport.session.close()
                                 logger.info("Closed pipeline transport session.")
-                
+
                 await self._service_client.close()
                 logger.info("Closed Azure BlobServiceClient.")
             except Exception as e:
@@ -458,16 +461,18 @@ class AzureBlobBackend(IStorageBackend):
                 logger.error(f"Error closing Azure BlobServiceClient: {e}")
             finally:
                 self._service_client = None
-                self._container_client = None        # Close the credential if it exists
+                self._container_client = None  # Close the credential if it exists
         if self._credential:
             try:
                 # More aggressive credential cleanup
-                if hasattr(self._credential, '_client') and hasattr(self._credential._client, '_session'):
+                if hasattr(self._credential, "_client") and hasattr(
+                    self._credential._client, "_session"
+                ):
                     session = self._credential._client._session
                     if session and not session.closed:
                         await session.close()
                         logger.info("Closed credential aiohttp session.")
-                
+
                 await self._credential.close()
                 logger.info("Closed Azure credential.")
             except Exception as e:
@@ -475,9 +480,11 @@ class AzureBlobBackend(IStorageBackend):
                 logger.error(f"Error closing Azure credential: {e}")
             finally:
                 self._credential = None
-        
+
         if cleanup_errors:
-            logger.warning(f"Some cleanup operations had issues: {'; '.join(cleanup_errors)}")
+            logger.warning(
+                f"Some cleanup operations had issues: {'; '.join(cleanup_errors)}"
+            )
 
     async def __aenter__(self):
         await self._get_container_client()  # Ensure client is ready
