@@ -15,7 +15,7 @@ import time
 import uuid
 from azure.storage.blob.aio import BlobServiceClient
 from pathlib import Path
-from typing import Generator, AsyncGenerator, TYPE_CHECKING
+from typing import Generator, AsyncGenerator, AsyncIterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from storage.backends.azure_blob_backend import AzureBlobBackend
@@ -158,8 +158,8 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
                 time.sleep(0.5)
 
 
-@pytest.fixture(scope="function")
-async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
+@pytest_asyncio.fixture(scope="function")
+async def azure_backend() -> AsyncIterator[IStorageBackend]:
     """Fixture for AzureBlobBackend using settings from .env.test, manages container lifecycle with unique names."""
     settings = test_settings()
 
@@ -184,22 +184,11 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
         account_name=az_account_name,
     )
 
-    # Setup the backend
-    await backend.__aenter__()
-
-    try:
+    # Use async context manager properly
+    async with backend:
         yield backend
-    finally:
-        # Cleanup in finally block to ensure it always runs
-        try:
-            await backend.__aexit__(None, None, None)
-        except Exception as e:
-            print(f"Azure backend cleanup warning: {e}")
-
-        try:
-            await backend.close()
-        except Exception as e:
-            print(f"Azure backend close warning: {e}")
+        # Small delay to allow Azure SDK to complete any pending operations
+        await asyncio.sleep(0.1)
 
 
 # --- Async Azure cleanup helper for thread safety ---

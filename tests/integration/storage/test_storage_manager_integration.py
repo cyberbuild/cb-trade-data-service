@@ -493,7 +493,7 @@ async def test_storage_manager_integration_flow(storage_manager: IStorageManager
     test_context = {
         "data_type": "ohlcv",
         "exchange": exchange,
-        "coin": "TEST_USD",
+        "coin": "BTC_USD",
         "interval": "5m",
     }
     # The storage_manager fixture is injected by pytest from conftest.py
