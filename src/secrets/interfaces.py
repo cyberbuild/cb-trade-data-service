@@ -3,6 +3,7 @@ import abc
 from pydantic import SecretStr
 from typing import Optional
 
+
 class ISecretProvider(abc.ABC):
     """Interface for retrieving secrets from different sources."""
 

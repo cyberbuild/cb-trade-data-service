@@ -1,8 +1,10 @@
 from typing import Dict, Any, Type
 from storage.path_strategy import IStoragePathStrategy, OHLCVPathStrategy
 
+
 class DataTypeRegistry:
     """Registry mapping data types to their appropriate path strategies"""
+
     _registry = {}
 
     @classmethod
@@ -30,9 +32,9 @@ class PathStrategyFactory:
     @staticmethod
     def create_strategy_from_context(context: Dict[str, Any]) -> IStoragePathStrategy:
         """Create appropriate strategy based on context"""
-        if 'data_type' not in context or not context['data_type']:
+        if "data_type" not in context or not context["data_type"]:
             raise ValueError("Context must contain 'data_type'")
-        data_type = context['data_type']
+        data_type = context["data_type"]
         return DataTypeRegistry.create_strategy(data_type)
 
 

@@ -1,0 +1,162 @@
+name: Development CI & PR to Master
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push events but only for the development branch
+  push:
+    branches:
+      - development
+  # Triggers the workflow on pull request events targeting the development branch
+  pull_request:
+    branches:
+      - development
+
+# Set default permissions for the GITHUB_TOKEN
+# These permissions are necessary for the actions used in this workflow.
+permissions:
+  contents: write # Needed for peter-evans/create-pull-request to push a branch and create a PR
+  packages: write # Needed to publish packages to GitHub Packages
+  pull-requests: write # Needed to create pull requests
+  id-token: write # Required for OIDC authentication with Azure
+
+jobs:
+  build-test-publish-and-pr:
+    name: Build, Test, Publish & Create PR
+    runs-on: ubuntu-latest # Specifies the type of runner the job will run on
+    env: # Set environment variables for all steps in this job
+      PYTHON DONTWRITEBYTECODE: '1' # Prevents Python from writing .pyc files
+
+    steps:      # 1. Checkout your repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetches all history for all branches and tags.
+          fetch-depth: 0
+
+      # 2. Azure Login using OIDC
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}      # 3. Set up Conda environment
+      - name: Set up Conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: cb-trade
+          environment-file: environment.yml
+          python-version: '3.9'
+          auto-activate-base: false
+          use-mamba: true
+          conda-solver: libmamba
+
+      # 6. Debug Environment Variables for Tests
+      # This step helps verify if secrets and env vars are being set as expected.
+      - name: Debug Environment Variables for Tests
+        shell: bash -l {0}
+        env:
+          # Azure authentication for managed identity (GitHub OIDC)
+          STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
+          STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
+          STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          STORAGE_ROOT_PATH: ./test_data # Correct environment variable name
+          CCXT__DEFAULT_EXCHANGE: cryptocom
+        run: |
+          echo "--- Debugging Environment Variables ---"
+          echo "Checking for STORAGE_AZURE_ACCOUNT_NAME..."
+          if [ -n "$STORAGE_AZURE_ACCOUNT_NAME" ]; then
+            echo "STORAGE_AZURE_ACCOUNT_NAME is SET (value: $STORAGE_AZURE_ACCOUNT_NAME)"
+          else
+            echo "STORAGE_AZURE_ACCOUNT_NAME is NOT SET"
+          fi
+
+          echo "Checking for STORAGE_AZURE_USE_MANAGED_IDENTITY..."
+          if [ -n "$STORAGE_AZURE_USE_MANAGED_IDENTITY" ]; then
+            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is SET (value: $STORAGE_AZURE_USE_MANAGED_IDENTITY)"
+          else
+            echo "STORAGE_AZURE_USE_MANAGED_IDENTITY is NOT SET"
+          fi
+
+          echo "Checking for STORAGE_AZURE_CONTAINER_NAME..."
+          if [ -n "$STORAGE_AZURE_CONTAINER_NAME" ]; then
+            echo "STORAGE_AZURE_CONTAINER_NAME is SET (value: $STORAGE_AZURE_CONTAINER_NAME)"
+          else
+            echo "STORAGE_AZURE_CONTAINER_NAME is NOT SET"
+          fi
+          echo "--- End Debugging Environment Variables ---"      # 7. Run tests
+      # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
+      # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
+      # and direct assignment for non-sensitive configurations.
+      # --tb=long ensures full tracebacks are shown for all failures.
+      - name: Run tests with Pytest
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
+        timeout-minutes: 20 # Add timeout protection for CI
+        env:
+          # Azure authentication for managed identity (GitHub OIDC)
+          STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
+          STORAGE_AZURE_USE_MANAGED_IDENTITY: "true"
+          STORAGE_AZURE_CONTAINER_NAME: ${{ secrets.STORAGE_AZURE_CONTAINER_NAME }}
+          
+          # Fallback to connection string if needed (for transition period)
+          STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
+           # Non-sensitive configurations from your .env.test file
+          STORAGE_ROOT_PATH: ./test_data # Correct environment variable name
+          CCXT_DEFAULT_EXCHANGE: cryptocom
+          
+          # Add async/pytest settings for better CI behavior
+          PYTHONUNBUFFERED: "1"
+          PYTEST_TIMEOUT: "300"
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          # Install package in editable mode for testing
+          pip install -e .
+          
+          # Run only exchange_data_service integration tests with Azure backend
+          pytest tests/integration/ \
+            --tb=short \
+            -k "azure" \
+            -n auto \
+            --timeout=300 \
+            -v \
+            --durations=10
+
+      # 8. Build package
+      # The 'build' package should be installed (e.g., via environment.yml or Step 3).
+      - name: Build package
+        # Ensures conda environment is activated for this step by using a login shell
+        shell: bash -l {0}
+        run: python -m build
+
+      # 8. Publish to GitHub Packages (only on direct push to development)
+      - name: Publish package to GitHub Packages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.GITHUB_TOKEN }}
+          repository_url: https://pypi.pkg.github.com/YOUR_USERNAME_OR_ORG/ # IMPORTANT: Replace with your GitHub username or organization
+
+      # 9. Create Pull Request from development to master (only on direct push to development)
+      - name: Create Pull Request to master
+        if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Auto-PR: Merge development into master after successful CI"
+          branch: auto-pr/development-to-master
+          base: master
+          head: development
+          title: 'Auto-PR: Merge `development` into `master`'
+          body: |
+            Automated Pull Request
+            - This PR was automatically created after a successful build, test, and package publish on the `development` branch.
+            - Please review the changes before merging.
+
+            Triggered by commit: ${{ github.sha }}
+          labels: automated pr, development-merge
+          # assignees: your-github-username
+          # reviewers: your-github-username,another-reviewer
+          # draft: false

@@ -1,25 +1,36 @@
-# Prevent Python from writing .pyc files and __pycache__ folders
-PYTHONDONTWRITEBYTECODE=1
-
 name: cb-trade
 channels:
   - defaults
   - conda-forge
 dependencies:
   - python=3.9
+  - pip     # Ensure pip is installed by Conda
   - pandas
   - numpy
   - pydantic
-  - pydantic-settings
+  - pydantic-settings  
   - azure-storage-blob
+  - azure-core
   - fastapi
   - uvicorn
   - websockets
-  - ccxt
   - pytest
   - pytest-asyncio
   - pytest-mock
   - pytest-dotenv
   - pytest-timeout
+  - pytest-xdist
+  - pytest-sugar 
+  - pytest-clarity
+  - pytest-pretty
   - aiofiles
   - python-dotenv
+  - pyarrow
+  - deltalake    
+  - pip:
+    - ccxt  # Install ccxt using pip
+    - flake8 # Added linter
+    - black  # Added formatter
+    - build  # Build tools for packaging
+    - wheel  # Build tools for packaging
+    - azure-identity  # Required for Azure managed identity authentication

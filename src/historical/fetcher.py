@@ -1,10 +1,9 @@
-from typing import List, Any, Optional, Dict, Union
+from typing import Optional
 from storage.storage_manager import IStorageManager
 from exchange_source.models import ExchangeData, Metadata
-import pandas as pd
-import pyarrow as pa
 from datetime import datetime
 import datetime as dt
+
 
 class HistoricalFetcher:
     def __init__(self, storage_manager: IStorageManager):
@@ -17,7 +16,7 @@ class HistoricalFetcher:
         end_time: datetime,
         limit: Optional[int] = None,
         offset: int = 0,
-        **kwargs
+        **kwargs,
     ) -> ExchangeData:
         """
         Fetch historical data for given metadata from storage within a time range.
@@ -29,28 +28,32 @@ class HistoricalFetcher:
             metadata=metadata,
             start_date=start_time,
             end_date=end_time,
-            columns=kwargs.get('columns')
+            columns=kwargs.get("columns"),
         )
-          # Return with metadata (or return None if no data found)
+        # Return with metadata (or return None if no data found)
         if result_data is None:
             return ExchangeData(data=[], metadata=dict(metadata))
-        
+
         # Calculate pagination boundaries
         total_records = len(result_data.data)
-        
+
         # If offset is beyond the data, return empty result
         if offset >= total_records:
             return ExchangeData(data=[], metadata=dict(metadata))
-        
+
         # Calculate end index for slicing
         start_idx = offset
-        end_idx = min(offset + limit, total_records) if limit is not None else total_records
-        
+        end_idx = (
+            min(offset + limit, total_records) if limit is not None else total_records
+        )
+
         # Slice the data
         paginated_data = result_data.data[start_idx:end_idx]
-          # Create new ExchangeData with paginated data
-        paginated_result = ExchangeData(data=paginated_data, metadata=result_data.metadata)
-        
+        # Create new ExchangeData with paginated data
+        paginated_result = ExchangeData(
+            data=paginated_data, metadata=result_data.metadata
+        )
+
         return paginated_result
 
     async def get_latest_entry(self, metadata: Metadata):
@@ -66,20 +69,18 @@ class HistoricalFetcher:
         try:
             # Fetch data for the range using the correct parameter names
             exchange_data = await self._storage_manager.get_range(
-                metadata=metadata,
-                start_date=start_time,
-                end_date=end_time
+                metadata=metadata, start_date=start_time, end_date=end_time
             )
 
             if exchange_data is None or not exchange_data.data:
                 return None
-                
+
             # Find the record with the maximum timestamp
             latest_record = max(exchange_data.data, key=lambda x: x.timestamp)
-            
+
             # Return the record directly since it inherits from dict
             return dict(latest_record)
-            
+
         except Exception as e:
             # Log error and return None
             print(f"Error fetching latest entry: {e}")

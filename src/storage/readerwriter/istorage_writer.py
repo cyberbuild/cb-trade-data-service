@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from datetime import datetime
-import pandas as pd
 import pyarrow as pa
 
 from exchange_source.models import ExchangeData, IExchangeRecord
@@ -30,7 +29,6 @@ class IStorageWriter(ABC):
         context: Dict[str, Any],
         mode: str = "append",
         partition_cols: Optional[List[str]] = None,
-        storage_options: Dict[str, Any] = None
+        storage_options: Dict[str, Any] = None,
     ) -> None:
         pass
-

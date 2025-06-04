@@ -12,6 +12,7 @@ from .interfaces import ISecretProvider
 
 logger = logging.getLogger(__name__)
 
+
 class DotEnvSecretProvider(ISecretProvider):
     """Retrieves secrets from environment variables or a .env file."""
 
@@ -33,6 +34,7 @@ class DotEnvSecretProvider(ISecretProvider):
             logger.warning(f"Secret '{secret_name}' not found in environment.")
             return None
 
+
 class KeyVaultSecretProvider(ISecretProvider):
     """Retrieves secrets from Azure Key Vault."""
 
@@ -51,34 +53,42 @@ class KeyVaultSecretProvider(ISecretProvider):
         # except Exception as e:
         #     logger.error(f"Failed to initialize Azure Key Vault client: {e}")
         #     raise RuntimeError("Could not connect to Azure Key Vault") from e
-        logger.warning("KeyVaultSecretProvider requires azure-identity and azure-keyvault-secrets to be installed.")
-        logger.warning("Ensure DefaultAzureCredential can authenticate (e.g., via environment variables or managed identity).")
-        self.client = None # Placeholder
+        logger.warning(
+            "KeyVaultSecretProvider requires azure-identity and azure-keyvault-secrets to be installed."
+        )
+        logger.warning(
+            "Ensure DefaultAzureCredential can authenticate (e.g., via environment variables or managed identity)."
+        )
+        self.client = None  # Placeholder
 
     def get_secret(self, secret_name: str) -> Optional[SecretStr]:
-        """Retrieves secret from Azure Key Vault."""
         if self.client is None:
-             logger.error("Key Vault client not initialized. Cannot fetch secrets.")
-             # raise RuntimeError("Key Vault client not initialized.") # Or return None
-             return None # Returning None for now
+            logger.error("Key Vault client not initialized. Cannot fetch secrets.")
+            # raise RuntimeError("Key Vault client not initialized.") # Or return None
+            return None  # Returning None for now
 
         # Key Vault secret names often use dashes instead of underscores
-        kv_secret_name = secret_name.replace('_', '-')
+        kv_secret_name = secret_name.replace("_", "-")
         try:
             # secret = self.client.get_secret(kv_secret_name)
             # logger.debug(f"Retrieved secret '{kv_secret_name}' from Key Vault.")
             # return SecretStr(secret.value)
-            logger.warning(f"KeyVaultSecretProvider.get_secret is not fully implemented. Returning None for {kv_secret_name}.")
-            return None # Placeholder
-        except Exception as e: # Catch specific exceptions like ResourceNotFoundError
+            logger.warning(
+                f"KeyVaultSecretProvider.get_secret is not fully implemented. Returning None for {kv_secret_name}."
+            )
+            return None  # Placeholder
+        except Exception as e:  # Catch specific exceptions like ResourceNotFoundError
             # from azure.core.exceptions import ResourceNotFoundError
             # if isinstance(e, ResourceNotFoundError):
             #    logger.warning(f"Secret '{kv_secret_name}' not found in Key Vault: {self.vault_url}")
             #    return None
             # else:
-            logger.error(f"Error retrieving secret '{kv_secret_name}' from Key Vault: {e}")
+            logger.error(
+                f"Error retrieving secret '{kv_secret_name}' from Key Vault: {e}"
+            )
             # Re-raise or return None depending on desired behavior
-            return None # Or raise e
+            return None  # Or raise e
+
 
 # Factory function (optional)
 def get_secret_provider(provider_type: str = "dotenv", **kwargs) -> ISecretProvider:
