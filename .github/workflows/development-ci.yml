@@ -83,9 +83,7 @@ jobs:
           else
             echo "STORAGE_AZURE_CONTAINER_NAME is NOT SET"
           fi
-          echo "--- End Debugging Environment Variables ---"
-
-      # 7. Run tests
+          echo "--- End Debugging Environment Variables ---"      # 7. Run tests
       # Pytest should be installed from environment.yml (conda or pip section) by Step 2.
       # Environment variables for tests are passed via the 'env' context using GitHub secrets for sensitive data
       # and direct assignment for non-sensitive configurations.
@@ -93,6 +91,7 @@ jobs:
       - name: Run tests with Pytest
         # Ensures conda environment is activated for this step by using a login shell
         shell: bash -l {0}
+        timeout-minutes: 20 # Add timeout protection for CI
         env:
           # Azure authentication for managed identity (GitHub OIDC)
           STORAGE_AZURE_ACCOUNT_NAME: ${{ secrets.STORAGE_AZURE_ACCOUNT_NAME }}
@@ -103,9 +102,26 @@ jobs:
           STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
            # Non-sensitive configurations from your .env.test file
           STORAGE_ROOT_PATH: ./test_data # Correct environment variable name
-          CCXT_DEFAULT_EXCHANGE: cryptocom        
+          CCXT_DEFAULT_EXCHANGE: cryptocom
+          
+          # Add async/pytest settings for better CI behavior
+          PYTHONUNBUFFERED: "1"
+          PYTEST_TIMEOUT: "300"
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          pytest tests/integration/exchange_data_service/ --tb=short -k "azure" -n auto
+          # Install package in editable mode for testing
+          pip install -e .
+          
+          # Run only exchange_data_service integration tests with Azure backend
+          pytest tests/integration/exchange_data_service/ \
+            --tb=short \
+            -k "azure" \
+            -n auto \
+            --timeout=300 \
+            -v \
+            --durations=10
       # 8. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
       - name: Build package

@@ -173,7 +173,9 @@ async def azure_backend() -> AsyncIterator[IStorageBackend]:
             "STORAGE_AZURE_CONTAINER_NAME", "test-container-fallback"
         )
         use_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "true")
-        az_account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME", "unknown")    # Create unique container name per test to avoid thread safety issues
+        az_account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME", "unknown")
+    
+    # Create unique container name per test to avoid thread safety issues
     unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
 
     backend = AzureBlobBackend(
@@ -182,29 +184,38 @@ async def azure_backend() -> AsyncIterator[IStorageBackend]:
         account_name=az_account_name,
     )
 
+    backend_initialized = False
     try:
-        # Initialize the backend
-        async with backend:
-            logger.info(f"Azure backend fixture initialized for container: {unique_container_name}")
-            yield backend
-            logger.info(f"Azure backend fixture yielding complete for container: {unique_container_name}")
+        # Initialize the backend with timeout protection
+        await asyncio.wait_for(backend._get_container_client(), timeout=30.0)
+        backend_initialized = True
+        logger.info(f"Azure backend fixture initialized for container: {unique_container_name}")
+        
+        yield backend
+        logger.info(f"Azure backend fixture yielding complete for container: {unique_container_name}")
+        
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout initializing Azure backend for container: {unique_container_name}")
+        raise
     except Exception as e:
         logger.error(f"Error in azure_backend fixture: {e}")
         raise
     finally:
-        # Ensure explicit cleanup - the async context manager should handle this,
-        # but we'll add explicit cleanup as a safety net
-        try:
-            if hasattr(backend, '_closed') and not backend._closed:
-                await backend.close()
-        except Exception as cleanup_error:
-            logger.warning(f"Error during explicit cleanup in fixture: {cleanup_error}")
+        # Robust cleanup with timeout protection
+        if backend_initialized:
+            try:
+                await asyncio.wait_for(backend.close(), timeout=10.0)
+                logger.debug(f"Successfully closed Azure backend for container: {unique_container_name}")
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout during Azure backend cleanup for container: {unique_container_name}")
+            except Exception as cleanup_error:
+                logger.warning(f"Error during Azure backend cleanup: {cleanup_error}")
         
-        # Add small delay to allow Azure SDK to complete any pending operations
+        # Allow some time for async cleanup to complete
         try:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
         except Exception:
-            pass  # Ignore any issues with the sleep
+            pass
 
 
 # --- Async Azure cleanup helper for thread safety ---
@@ -359,27 +370,28 @@ async def setup_historical_data(
     setup_sm = OHLCVStorageManager(
         backend=current_backend_for_setup,
         **make_strategy_kwargs_for_setup(current_backend_for_setup),
-    )
-
-    # Explicitly load .env.test for test configurations
+    )    # Explicitly load .env.test for test configurations
     settings = test_settings()
-    ccxt_client = CCXTExchangeClient(exchange_id="cryptocom", config=settings.ccxt)
-    context = {
-        "exchange": "cryptocom",
-        "coin": "BTC/USD",
-        "data_type": "ohlcv",
-        "interval": "1m",
-    }
-    interval = "1m"
-    fetch_duration_hours = 1
-
-    end_time = datetime.datetime.now(datetime.timezone.utc)
-    start_time = end_time - datetime.timedelta(hours=fetch_duration_hours)
-
-    print(
-        f"Setup ({backend_type}): Fetching data for {context['coin']} from {start_time} to {end_time}"
-    )
+    ccxt_client = None
+    
     try:
+        ccxt_client = CCXTExchangeClient(exchange_id="cryptocom", config=settings.ccxt)
+        context = {
+            "exchange": "cryptocom",
+            "coin": "BTC/USD",
+            "data_type": "ohlcv",
+            "interval": "1m",
+        }
+        interval = "1m"
+        fetch_duration_hours = 1
+
+        end_time = datetime.datetime.now(datetime.timezone.utc)
+        start_time = end_time - datetime.timedelta(hours=fetch_duration_hours)
+
+        print(
+            f"Setup ({backend_type}): Fetching data for {context['coin']} from {start_time} to {end_time}"
+        )
+        
         exchange_data = await ccxt_client.fetch_ohlcv_data(
             coin_symbol=context["coin"],
             start_time=start_time,
@@ -402,11 +414,14 @@ async def setup_historical_data(
         print(f"Setup ({backend_type}): Error during data fetching/saving: {e}")
         pytest.fail(f"Failed to set up historical data for {backend_type}: {e}")
     finally:
-        if ccxt_client:  # Ensure client exists before closing
-            await ccxt_client.close()
-            print(f"Setup ({backend_type}): Closed CCXT client.")
-        # The setup_sm's backend (current_backend_for_setup) is managed by its own fixture (local_backend or azure_backend)
-        # No need to explicitly close setup_sm here if its backend is managed elsewhere.
+        if ccxt_client:
+            try:
+                await asyncio.wait_for(ccxt_client.close(), timeout=5.0)
+                print(f"Setup ({backend_type}): Closed CCXT client.")
+            except asyncio.TimeoutError:
+                print(f"Setup ({backend_type}): Timeout closing CCXT client.")
+            except Exception as e:
+                print(f"Setup ({backend_type}): Error closing CCXT client: {e}")
 
 
 # --- Cleanup Fixture ---
