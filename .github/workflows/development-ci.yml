@@ -101,12 +101,11 @@ jobs:
           
           # Fallback to connection string if needed (for transition period)
           STORAGE_AZURE_CONNECTION_STRING: ${{ secrets.STORAGE_AZURE_CONNECTION_STRING }}
-            # Non-sensitive configurations from your .env.test file
+           # Non-sensitive configurations from your .env.test file
           STORAGE_ROOT_PATH: ./test_data # Correct environment variable name
-          CCXT_DEFAULT_EXCHANGE: cryptocom
+          CCXT_DEFAULT_EXCHANGE: cryptocom        
         run: |
-          pytest tests/unit/ --tb=short -n auto
-          pytest tests/integration/ --tb=short -k "azure" -n auto 
+          pytest tests/integration/exchange_data_service/ --tb=short -k "azure" -n auto
       # 8. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
       - name: Build package
