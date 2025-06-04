@@ -15,7 +15,10 @@ import time
 import uuid
 from azure.storage.blob.aio import BlobServiceClient
 from pathlib import Path
-from typing import Generator, AsyncGenerator
+from typing import Generator, AsyncGenerator, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from storage.backends.azure_blob_backend import AzureBlobBackend
 import datetime
 import pandas as pd
 import logging  # Ensure logging is imported
@@ -179,24 +182,23 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
         use_managed_identity=use_identity,
         account_name=az_account_name,
     )
-
+    
+    # Setup the backend
+    await backend.__aenter__()
+    
     try:
-        # Use async context manager properly
-        async with backend:
-            yield backend
-    except Exception as e:
-        print(f"Error in azure_backend fixture: {e}")
-        raise
+        yield backend
     finally:
-        # Container cleanup is handled by the async context manager
-        # but we'll try to delete the test container as an extra cleanup step
+        # Cleanup in finally block to ensure it always runs
         try:
-            if backend._service_client:
-                print(f"Final cleanup: deleting test container {unique_container_name}")
-                await backend._service_client.delete_container(unique_container_name)
-                print(f"Successfully deleted test container: {unique_container_name}")
+            await backend.__aexit__(None, None, None)
         except Exception as e:
-            print(f"Note: Test container cleanup failed (may already be deleted): {e}")
+            print(f"Azure backend cleanup warning: {e}")
+        
+        try:
+            await backend.close()
+        except Exception as e:
+            print(f"Azure backend close warning: {e}")
 
 
 # --- Async Azure cleanup helper for thread safety ---
