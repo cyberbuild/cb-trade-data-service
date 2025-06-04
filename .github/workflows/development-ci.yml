@@ -10,6 +10,8 @@ on:
   pull_request:
     branches:
       - development
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 # Set default permissions for the GITHUB_TOKEN
 # These permissions are necessary for the actions used in this workflow.
@@ -19,7 +21,7 @@ permissions:
   pull-requests: write # Needed to create pull requests
   id-token: write # Required for OIDC authentication with Azure
 
-jobs:  
+jobs:
   build-test-publish-and-pr:
     name: Build, Test, Publish & Create PR
     runs-on: ubuntu-latest # Specifies the type of runner the job will run on
@@ -36,11 +38,13 @@ jobs:
 
       # 2. Azure Login using OIDC
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v1        
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}      # 3. Set up Conda environment
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      # 3. Set up Conda environment
       - name: Set up Conda environment
         uses: conda-incubator/setup-miniconda@v3
         with:
