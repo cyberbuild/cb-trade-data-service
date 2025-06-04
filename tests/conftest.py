@@ -155,7 +155,7 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
 
 
 @pytest.fixture(scope="function")
-async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:  # Async fixture
+async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:
     """Fixture for AzureBlobBackend using settings from .env.test, manages container lifecycle with unique names."""
     settings = test_settings()
 
@@ -181,24 +181,22 @@ async def azure_backend() -> AsyncGenerator[IStorageBackend, None]:  # Async fix
     )
 
     try:
-        # Initialize the backend
-        await backend.__aenter__()
-        yield backend
-    finally:  # Do cleanup operations while client is still active
+        # Use async context manager properly
+        async with backend:
+            yield backend
+    except Exception as e:
+        print(f"Error in azure_backend fixture: {e}")
+        raise
+    finally:
+        # Container cleanup is handled by the async context manager
+        # but we'll try to delete the test container as an extra cleanup step
         try:
-            print(f"Attempting to delete test container: {unique_container_name}")
-            await backend._service_client.delete_container(unique_container_name)
-            print(f"Deleted test container: {unique_container_name}")
+            if backend._service_client:
+                print(f"Final cleanup: deleting test container {unique_container_name}")
+                await backend._service_client.delete_container(unique_container_name)
+                print(f"Successfully deleted test container: {unique_container_name}")
         except Exception as e:
-            print(
-                f"Warning: Failed to delete test container {unique_container_name}: {e}"
-            )
-
-        # Now close the client properly
-        try:
-            await backend.__aexit__(None, None, None)
-        except Exception as e:
-            print(f"Warning: Error closing Azure backend: {e}")
+            print(f"Note: Test container cleanup failed (may already be deleted): {e}")
 
 
 # --- Async Azure cleanup helper for thread safety ---

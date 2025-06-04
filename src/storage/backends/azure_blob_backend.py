@@ -416,10 +416,10 @@ class AzureBlobBackend(IStorageBackend):
         #         logger.error(f"Directory marker blob already exists and exist_ok=False: {self.container_name}/{dir_identifier}")
         #         raise
         #     else:
-        #         logger.debug(f"Directory marker blob already exists: {self.container_name}/{dir_identifier}")
-        # except Exception as e:
+        #         logger.debug(f"Directory marker blob already exists: {self.container_name}/{dir_identifier}")        # except Exception as e:
         #     logger.error(f"Error creating directory marker blob {self.container_name}/{dir_identifier}: {e}")
         #     raise
+        
         logger.debug(
             f"Azure makedirs called for {identifier}. Generally a no-op unless creating explicit markers."
         )
@@ -427,6 +427,10 @@ class AzureBlobBackend(IStorageBackend):
 
     async def close(self):
         """Closes the underlying BlobServiceClient and credential."""
+        # Prevent double closing
+        if self._service_client is None and self._credential is None:
+            return
+            
         if self._service_client:
             try:
                 await self._service_client.close()
