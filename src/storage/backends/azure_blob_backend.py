@@ -53,7 +53,7 @@ class AzureBlobBackend(IStorageBackend):
             if not account_name:
                 raise ValueError(
                     "account_name is required when using managed identity authentication."
-                )            
+                )
             self.auth_mode = "managed_identity"
             self.account_name = account_name
             self.connection_string = None
@@ -78,7 +78,6 @@ class AzureBlobBackend(IStorageBackend):
         self._service_client: Optional[BlobServiceClient] = None
         self._container_client: Optional[ContainerClient] = None
         self._credential = None  # Store credential reference for proper cleanup
-        self._closed = False  # Track cleanup state
         logger.info(f"Initialized AzureBlobBackend for container: {container_name}")
 
     def _extract_account_name_from_connection_string(
@@ -411,7 +410,8 @@ class AzureBlobBackend(IStorageBackend):
         # blob_client = container_client.get_blob_client(dir_identifier)
         # try:
         #     await blob_client.upload_blob(b'', overwrite=exist_ok) # Create empty blob
-        #     logger.debug(f"Ensured directory marker exists (by creating empty blob): {self.container_name}/{dir_identifier}")        # except ResourceExistsError:
+        #     logger.debug(f"Ensured directory marker exists (by creating empty blob): {self.container_name}/{dir_identifier}")
+        # except ResourceExistsError:
         #     if not exist_ok:
         #         logger.error(f"Directory marker blob already exists and exist_ok=False: {self.container_name}/{dir_identifier}")
         #         raise
@@ -419,58 +419,37 @@ class AzureBlobBackend(IStorageBackend):
         #         logger.debug(f"Directory marker blob already exists: {self.container_name}/{dir_identifier}")        # except Exception as e:
         #     logger.error(f"Error creating directory marker blob {self.container_name}/{dir_identifier}: {e}")
         #     raise
-
+        
         logger.debug(
             f"Azure makedirs called for {identifier}. Generally a no-op unless creating explicit markers."
         )
         pass  # Often a no-op for blob storage
 
     async def close(self):
-        """Closes the underlying BlobServiceClient and credential with robust cleanup."""
-        # Check if already closed
-        if getattr(self, '_closed', False):
-            logger.debug("Azure backend already closed, skipping cleanup")
+        """Closes the underlying BlobServiceClient and credential."""
+        # Prevent double closing
+        if self._service_client is None and self._credential is None:
             return
-
-        logger.debug("Starting Azure backend cleanup...")
-        cleanup_errors = []
-
-        # Clean up container client first
-        if self._container_client:
-            try:
-                # No explicit close needed for container client
-                self._container_client = None
-                logger.debug("Cleaned up container client reference")
-            except Exception as e:
-                cleanup_errors.append(f"container client: {e}")
-
-        # Clean up service client
+            
         if self._service_client:
             try:
                 await self._service_client.close()
-                logger.debug("Closed Azure BlobServiceClient")
+                logger.info("Closed Azure BlobServiceClient.")
             except Exception as e:
-                cleanup_errors.append(f"service client: {e}")
+                logger.error(f"Error closing Azure BlobServiceClient: {e}")
             finally:
                 self._service_client = None
+                self._container_client = None
 
-        # Clean up credential
+        # Close the credential if it exists
         if self._credential:
             try:
                 await self._credential.close()
-                logger.debug("Closed Azure credential")
+                logger.info("Closed Azure credential.")
             except Exception as e:
-                cleanup_errors.append(f"credential: {e}")
+                logger.error(f"Error closing Azure credential: {e}")
             finally:
                 self._credential = None
-
-        # Mark as closed
-        self._closed = True
-
-        if cleanup_errors:
-            logger.warning(f"Cleanup completed with errors: {'; '.join(cleanup_errors)}")
-        else:
-            logger.info("Azure backend cleanup completed successfully")
 
     async def __aenter__(self):
         await self._get_container_client()  # Ensure client is ready

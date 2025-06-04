@@ -115,13 +115,14 @@ jobs:
           pip install -e .
           
           # Run only exchange_data_service integration tests with Azure backend
-          pytest tests/integration/exchange_data_service/ \
+          pytest tests/integration/ \
             --tb=short \
             -k "azure" \
             -n auto \
             --timeout=300 \
             -v \
             --durations=10
+
       # 8. Build package
       # The 'build' package should be installed (e.g., via environment.yml or Step 3).
       - name: Build package

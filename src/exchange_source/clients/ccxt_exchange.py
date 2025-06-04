@@ -34,14 +34,6 @@ class CCXTExchangeClient(IExchangeAPIClient):
 
         self._exchange = exchange_class(params)
 
-    async def __aenter__(self):
-        """Async context manager entry."""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit with cleanup."""
-        await self.close()
-
     async def close(self):
         """Closes the underlying ccxt exchange connection."""
         try:

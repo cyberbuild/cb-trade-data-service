@@ -15,7 +15,7 @@ import time
 import uuid
 from azure.storage.blob.aio import BlobServiceClient
 from pathlib import Path
-from typing import Generator, AsyncGenerator, AsyncIterator, TYPE_CHECKING
+from typing import Generator, AsyncGenerator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from storage.backends.azure_blob_backend import AzureBlobBackend
@@ -89,7 +89,6 @@ def env_logger_func():
 def test_settings() -> Settings:
     """Load test settings, fallback to defaults if .env.test doesn't exist."""
     import os
-
     if os.path.exists(".env.test"):
         settings = get_settings(env_file=".env.test")
     else:
@@ -105,7 +104,7 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
 
     # Get STORAGE_ROOT_PATH from settings
     storage_root_path = settings.storage.root_path
-
+   
     project_root = Path(__file__).parent.parent.resolve()
 
     # Check if STORAGE_ROOT_PATH is relative or absolute
@@ -158,8 +157,61 @@ def local_backend() -> Generator[IStorageBackend, None, None]:
                 time.sleep(0.5)
 
 
-@pytest_asyncio.fixture(scope="function")
-async def azure_backend() -> AsyncIterator[IStorageBackend]:
+class AzureBackendWrapper:
+    """Wrapper for Azure backend that provides explicit async cleanup."""
+    
+    def __init__(self, backend: "AzureBlobBackend", container_name: str):
+        self.backend = backend
+        self.container_name = container_name
+        self._is_setup = False
+        self._is_closed = False
+    
+    async def __aenter__(self):
+        if not self._is_setup:
+            await self.backend.__aenter__()
+            self._is_setup = True
+        return self.backend
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self._is_setup and not self._is_closed:
+            await self._cleanup()
+    
+    async def _cleanup(self):
+        """Robust cleanup of Azure resources."""
+        if self._is_closed:
+            return
+        
+        self._is_closed = True
+        cleanup_errors = []
+        
+        try:
+            # Close the backend context manager
+            if self._is_setup:
+                await self.backend.__aexit__(None, None, None)
+        except Exception as e:
+            cleanup_errors.append(f"Backend context cleanup: {e}")
+        
+        try:
+            # Additional container cleanup attempt
+            if self.backend._service_client and not self.backend._service_client._client._session.closed:
+                print(f"Final cleanup: deleting test container {self.container_name}")
+                await self.backend._service_client.delete_container(self.container_name)
+                print(f"Successfully deleted test container: {self.container_name}")
+        except Exception as e:
+            cleanup_errors.append(f"Container cleanup: {e}")
+        
+        try:
+            # Ensure backend close is called
+            await self.backend.close()
+        except Exception as e:
+            cleanup_errors.append(f"Backend close: {e}")
+        
+        if cleanup_errors:
+            print(f"Cleanup warnings for container {self.container_name}: {'; '.join(cleanup_errors)}")
+
+
+@pytest.fixture(scope="function")
+async def azure_backend() -> IStorageBackend:
     """Fixture for AzureBlobBackend using settings from .env.test, manages container lifecycle with unique names."""
     settings = test_settings()
 
@@ -174,48 +226,26 @@ async def azure_backend() -> AsyncIterator[IStorageBackend]:
         )
         use_identity = os.environ.get("STORAGE_AZURE_USE_MANAGED_IDENTITY", "true")
         az_account_name = os.environ.get("STORAGE_AZURE_ACCOUNT_NAME", "unknown")
-    
+
     # Create unique container name per test to avoid thread safety issues
     unique_container_name = f"{base_container_name}-{uuid.uuid4().hex[:8]}"
 
     backend = AzureBlobBackend(
         container_name=unique_container_name,
-        use_managed_identity=use_identity.lower() == "true",
+        use_managed_identity=use_identity,
         account_name=az_account_name,
     )
-
-    backend_initialized = False
+    
+    wrapper = AzureBackendWrapper(backend, unique_container_name)
+    
     try:
-        # Initialize the backend with timeout protection
-        await asyncio.wait_for(backend._get_container_client(), timeout=30.0)
-        backend_initialized = True
-        logger.info(f"Azure backend fixture initialized for container: {unique_container_name}")
-        
-        yield backend
-        logger.info(f"Azure backend fixture yielding complete for container: {unique_container_name}")
-        
-    except asyncio.TimeoutError:
-        logger.error(f"Timeout initializing Azure backend for container: {unique_container_name}")
-        raise
+        # Setup the backend
+        async with wrapper as configured_backend:
+            return configured_backend
     except Exception as e:
-        logger.error(f"Error in azure_backend fixture: {e}")
+        # Ensure cleanup happens even if setup fails
+        await wrapper._cleanup()
         raise
-    finally:
-        # Robust cleanup with timeout protection
-        if backend_initialized:
-            try:
-                await asyncio.wait_for(backend.close(), timeout=10.0)
-                logger.debug(f"Successfully closed Azure backend for container: {unique_container_name}")
-            except asyncio.TimeoutError:
-                logger.warning(f"Timeout during Azure backend cleanup for container: {unique_container_name}")
-            except Exception as cleanup_error:
-                logger.warning(f"Error during Azure backend cleanup: {cleanup_error}")
-        
-        # Allow some time for async cleanup to complete
-        try:
-            await asyncio.sleep(0.2)
-        except Exception:
-            pass
 
 
 # --- Async Azure cleanup helper for thread safety ---
@@ -287,7 +317,7 @@ def test_path_strategy():
 # --- Parameterized StorageManager Fixture ---
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def storage_manager(
     request, local_backend, azure_backend, test_path_strategy
 ) -> AsyncGenerator[IStorageManager[IExchangeRecord], None]:
@@ -326,7 +356,7 @@ async def storage_manager(
     # No explicit close for manager here; its backend is closed by its own fixture (local_backend/azure_backend)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def setup_historical_data(
     request, local_backend, azure_backend, test_path_strategy
 ) -> AsyncGenerator[dict, None]:
@@ -370,28 +400,27 @@ async def setup_historical_data(
     setup_sm = OHLCVStorageManager(
         backend=current_backend_for_setup,
         **make_strategy_kwargs_for_setup(current_backend_for_setup),
-    )    # Explicitly load .env.test for test configurations
+    )
+
+    # Explicitly load .env.test for test configurations
     settings = test_settings()
-    ccxt_client = None
-    
+    ccxt_client = CCXTExchangeClient(exchange_id="cryptocom", config=settings.ccxt)
+    context = {
+        "exchange": "cryptocom",
+        "coin": "BTC/USD",
+        "data_type": "ohlcv",
+        "interval": "1m",
+    }
+    interval = "1m"
+    fetch_duration_hours = 1
+
+    end_time = datetime.datetime.now(datetime.timezone.utc)
+    start_time = end_time - datetime.timedelta(hours=fetch_duration_hours)
+
+    print(
+        f"Setup ({backend_type}): Fetching data for {context['coin']} from {start_time} to {end_time}"
+    )
     try:
-        ccxt_client = CCXTExchangeClient(exchange_id="cryptocom", config=settings.ccxt)
-        context = {
-            "exchange": "cryptocom",
-            "coin": "BTC/USD",
-            "data_type": "ohlcv",
-            "interval": "1m",
-        }
-        interval = "1m"
-        fetch_duration_hours = 1
-
-        end_time = datetime.datetime.now(datetime.timezone.utc)
-        start_time = end_time - datetime.timedelta(hours=fetch_duration_hours)
-
-        print(
-            f"Setup ({backend_type}): Fetching data for {context['coin']} from {start_time} to {end_time}"
-        )
-        
         exchange_data = await ccxt_client.fetch_ohlcv_data(
             coin_symbol=context["coin"],
             start_time=start_time,
@@ -414,14 +443,11 @@ async def setup_historical_data(
         print(f"Setup ({backend_type}): Error during data fetching/saving: {e}")
         pytest.fail(f"Failed to set up historical data for {backend_type}: {e}")
     finally:
-        if ccxt_client:
-            try:
-                await asyncio.wait_for(ccxt_client.close(), timeout=5.0)
-                print(f"Setup ({backend_type}): Closed CCXT client.")
-            except asyncio.TimeoutError:
-                print(f"Setup ({backend_type}): Timeout closing CCXT client.")
-            except Exception as e:
-                print(f"Setup ({backend_type}): Error closing CCXT client: {e}")
+        if ccxt_client:  # Ensure client exists before closing
+            await ccxt_client.close()
+            print(f"Setup ({backend_type}): Closed CCXT client.")
+        # The setup_sm's backend (current_backend_for_setup) is managed by its own fixture (local_backend or azure_backend)
+        # No need to explicitly close setup_sm here if its backend is managed elsewhere.
 
 
 # --- Cleanup Fixture ---
