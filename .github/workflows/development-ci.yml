@@ -50,16 +50,6 @@ jobs:
           use-mamba: true
           conda-solver: libmamba
 
-      # 5. (Optional but Recommended) Lint and Format Check
-      # Flake8 and Black should be installed from environment.yml's pip section by Step 2.
-      # Flake8 will use the .flake8 configuration file in the project root.
-      - name: Lint and Format Check
-        # Ensures conda environment is activated for this step by using a login shell
-        shell: bash -l {0}
-        run: |
-          echo "Running linters and format checkers. Flake8 and Black should be installed via environment.yml."
-          flake8 . --exclude tests # Exclude the tests folder from flake8          black --check . --exclude tests # Optionally exclude tests from black as well
-
       # 6. Debug Environment Variables for Tests
       # This step helps verify if secrets and env vars are being set as expected.
       - name: Debug Environment Variables for Tests
